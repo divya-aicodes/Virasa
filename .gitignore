@@ -1,0 +1,11 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+server/kalachain.db
+server/kalachain.db-wal
+server/kalachain.db-shm
+server/uploads/
+*.log
+server-log.txt
