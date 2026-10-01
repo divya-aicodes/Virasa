@@ -38,14 +38,7 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const visibleLinks = user
-    ? [
-        { to: '/verify', label: 'Verify a piece' },
-        user.role === 'admin'
-          ? { to: '/admin', label: 'Maintain archive' }
-          : { to: '/artisan', label: 'My studio' },
-      ]
-    : utilityLinks;
+  const visibleLinks = user ? utilityLinks.filter((l) => l.to !== '/login') : utilityLinks;
 
   function confirmSignOut() {
     setOpen(false);
@@ -133,7 +126,7 @@ export default function Navbar() {
                     }`
                   }
                 >
-                  {(link.to === '/verify' || link.to === '/admin') && <ShieldCheck className="h-4 w-4" />}
+                  {link.to === '/verify' && <ShieldCheck className="h-4 w-4" />}
                   {link.label}
                 </NavLink>
               ))}

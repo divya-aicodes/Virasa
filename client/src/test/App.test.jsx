@@ -40,7 +40,7 @@ describe('App shell', () => {
 });
 
 describe('RequireAdmin guard', () => {
-  it('shows artisans a path back to their studio', async () => {
+  it('hides the registry from artisans and shows sign-out', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -53,12 +53,12 @@ describe('RequireAdmin guard', () => {
     renderAt('/', <div>Landing content</div>);
 
     expect(await screen.findByText('Landing content')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'My studio' })).toHaveAttribute('href', '/artisan');
-    expect(screen.queryByText('Maintain archive')).toBeNull();
+    expect(screen.queryByText('Manage')).toBeNull();
+    expect(screen.queryByText('Admin')).toBeNull();
     expect(screen.getByText('Sunita Devi · Sign out')).toBeTruthy();
   });
 
-  it('shows admins a path back to archive maintenance', async () => {
+  it('keeps the admin toolbar clean for admins', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -71,7 +71,7 @@ describe('RequireAdmin guard', () => {
     renderAt('/', <div>Landing content</div>);
 
     expect(await screen.findByText('Landing content')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Maintain archive' })).toHaveAttribute('href', '/admin');
+    expect(screen.queryByText('Manage')).toBeNull();
     expect(screen.getByText('Archive Admin · Sign out')).toBeTruthy();
   });
 
