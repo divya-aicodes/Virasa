@@ -192,7 +192,7 @@ a {
 
   .section-eyebrow {
     @apply text-[11px] font-medium uppercase;
-    color: #766b61;
+    color: #655a50;
     letter-spacing: 0.24em;
   }
 
@@ -282,6 +282,12 @@ a {
     background: linear-gradient(135deg, rgba(213, 202, 183, 0) 48%, #d8cebd 50%, #fffdf8 72%);
     filter: drop-shadow(-10px -8px 9px rgba(43, 35, 29, 0.12));
   }
+}
+
+/* Small editorial metadata must retain WCAG AA contrast even when older
+   components use translucent ink utility classes. */
+[class*="text-ink-900/"] {
+  color: rgb(43 35 29 / 0.82) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

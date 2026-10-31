@@ -7,39 +7,16 @@ import {
   EyeOff,
   KeyRound,
   Mail,
+  MapPin,
+  Palette,
   ShieldCheck,
   UserRound,
 } from 'lucide-react';
 import { useAuth } from '../auth.jsx';
+import HeritageCarousel from '../components/HeritageCarousel.jsx';
+import VirasaLogo from '../components/VirasaLogo.jsx';
 import { api } from '../lib/api.js';
 import './login.css';
-
-function VirasaMark({ dark = false }) {
-  return (
-    <div
-      className={`flex items-center gap-3 ${
-        dark ? 'text-[#f5efe1]' : 'text-[#24211c]'
-      }`}
-    >
-      <span
-        className={`relative grid h-9 w-9 place-items-center border ${
-          dark ? 'border-[#f5efe1]/55' : 'border-[#24211c]/55'
-        }`}
-      >
-        <span
-          className={`absolute inset-[5px] rotate-45 border ${
-            dark ? 'border-[#f5efe1]/65' : 'border-[#24211c]/65'
-          }`}
-        />
-        <span className="h-1.5 w-1.5 rounded-full bg-current" />
-      </span>
-
-      <span className="font-['Cormorant_Garamond'] text-[2.35rem] leading-none tracking-[-.035em]">
-        Virasā
-      </span>
-    </div>
-  );
-}
 
 function Field({
   id,
@@ -50,6 +27,9 @@ function Field({
   value,
   onChange,
   trailing,
+  autoComplete,
+  inputMode,
+  placeholder,
 }) {
   return (
     <label className="group block" htmlFor={id}>
@@ -69,12 +49,14 @@ function Field({
 
         <input
           id={id}
+          aria-label={label}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           type={type}
-          autoComplete={id === 'email' ? 'email' : 'current-password'}
+          autoComplete={autoComplete || (id === 'email' ? 'email' : 'current-password')}
+          inputMode={inputMode}
           className="min-w-0 flex-1 bg-transparent font-['Space_Grotesk'] text-[13px] text-[#28231d] outline-none placeholder:text-[#b7aa95]"
-          placeholder={id === 'email' ? 'your name or studio' : '••••••••••••'}
+          placeholder={placeholder || (id === 'email' ? 'you@example.com' : '••••••••••••')}
         />
 
         {trailing}
@@ -88,21 +70,69 @@ export default function Login() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [pehchanId, setPehchanId] = useState('');
+  const [village, setVillage] = useState('');
+  const [craft, setCraft] = useState('');
+  const [state, setState] = useState('');
+  const [district, setDistrict] = useState('');
   const [remember, setRemember] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
-  const { login } = useAuth();
+  const [mfaChallenge, setMfaChallenge] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const { login, completeMfa } = useAuth();
   const navigate = useNavigate();
 
   const isRegister = mode === 'register';
+  const isForgot = mode === 'forgot';
+  const isMfa = mode === 'mfa';
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (busy) return;
 
+    if (isMfa) {
+      if (!/^\d{6}$/.test(mfaCode)) {
+        setNotice('Enter the 6-digit code from your authenticator app.');
+        return;
+      }
+
+      setBusy(true);
+      setNotice('');
+      try {
+        const result = await completeMfa(mfaChallenge, mfaCode);
+        setNotice('Identity confirmed. The archive is open.');
+        navigate(result.user.role === 'admin' ? '/admin' : '/artisan', { replace: true });
+      } catch (e) {
+        setNotice(e.message || 'The verification code could not be accepted.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (isForgot) {
+      if (!email.trim()) {
+        setNotice('Enter the email address connected to your account.');
+        return;
+      }
+
+      setBusy(true);
+      setNotice('');
+      try {
+        await api.auth.forgotPassword(email.trim());
+        setNotice('If that account exists, a reset link has been sent.');
+      } catch (e) {
+        setNotice(e.message || 'The reset request could not be completed.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     if (!email.trim() || !password) {
-      setNotice(isRegister ? 'Fill in your name, email and password to join.' : 'Enter your archive credentials to continue.');
+      setNotice(isRegister ? 'Fill in your identity, craft, location, email and password to join.' : 'Enter your archive credentials to continue.');
       return;
     }
 
@@ -111,11 +141,25 @@ export default function Login() {
     try {
       if (isRegister) {
         if (name.trim().length < 2) throw new Error('Name must be at least 2 characters');
-        await api.auth.register({ name: name.trim(), email: email.trim(), password });
+        if (!pehchanId || !village.trim() || !craft.trim() || !state.trim() || !district.trim()) {
+          throw new Error('PEHCHAN ID, village, craft, state and district are required');
+        }
+        await api.auth.register({
+          name: name.trim(), email: email.trim(), password,
+          pehchanId, village: village.trim(), craft: craft.trim(), state: state.trim(), district: district.trim(),
+        });
         setMode('login');
-        setNotice('Account created. Sign in to continue.');
+        setNotice('Account created. Check your email; your PEHCHAN identity is pending archive review.');
       } else {
-        const user = await login(email.trim(), password);
+        const result = await login(email.trim(), password);
+        if (result.mfaRequired) {
+          setMfaChallenge(result.challengeToken);
+          setMfaCode('');
+          setMode('mfa');
+          setNotice('Enter the current code from your authenticator app.');
+          return;
+        }
+        const user = result.user;
         setNotice(user.role === 'admin' ? 'Welcome back. The archive is open.' : 'Signed in. Welcome back.');
         navigate(user.role === 'admin' ? '/admin' : '/artisan', { replace: true });
       }
@@ -131,7 +175,7 @@ export default function Login() {
       <div className="grid min-h-[100dvh] w-full lg:grid-cols-[minmax(0,1.08fr)_minmax(430px,.72fr)]">
         <section className="virasa-grain relative hidden min-h-[590px] overflow-hidden bg-[#211c17] px-12 py-10 text-[#f5efe1] lg:flex lg:flex-col lg:justify-between xl:px-[7vw]">
           <div className="virasa-enter relative z-10">
-            <VirasaMark dark />
+            <VirasaLogo dark animated />
 
             <p className="mt-3 max-w-[250px] border-l border-[#b89a57] pl-3 text-[9px] uppercase leading-[1.7] tracking-[.2em] text-[#b9aa8d]">
               Digital provenance for India&apos;s handmade heritage
@@ -143,11 +187,7 @@ export default function Login() {
               <div className="absolute -top-5 left-1/2 z-10 h-7 w-28 -translate-x-1/2 rotate-[2deg] bg-[#b99a51] opacity-90 shadow-[0_2px_2px_rgba(0,0,0,.25)]" />
 
               <div className="aspect-[.94] overflow-hidden border border-[#968361]/60 bg-[#d8ccb4]">
-                <img
-                  src="/uploads/product-KC-A1B2C3-final.svg"
-                  alt="Framed Madhubani-inspired mandala artwork"
-                  className="h-full w-full object-cover"
-                />
+                <HeritageCarousel className="h-full w-full" />
               </div>
 
               <div className="pointer-events-none absolute inset-0 border border-[#d4bb81]/20" />
@@ -168,13 +208,13 @@ export default function Login() {
             </div>
           </div>
 
-          <div className="virasa-enter virasa-enter-delay-2 relative z-10 flex items-end justify-between gap-5 border-t border-[#665542]/65 pt-5 text-[9px] uppercase tracking-[.15em] text-[#82745f]">
+          <div className="virasa-enter virasa-enter-delay-2 relative z-10 flex items-end justify-between gap-5 border-t border-[#665542]/65 pt-5 text-[9px] uppercase tracking-[.15em] text-[#aa9a82]">
             <span className="flex items-center gap-2">
               <ShieldCheck className="h-3.5 w-3.5 text-[#b89a57]" />
               Chain verified · SHA-256
             </span>
 
-            <span className="font-['Space_Mono'] text-[8px] text-[#675b4b]">
+            <span className="font-['Space_Mono'] text-[8px] text-[#aa9a82]">
               VA / 01—26
             </span>
           </div>
@@ -183,10 +223,10 @@ export default function Login() {
         <section className="relative flex min-h-[100dvh] flex-col justify-between overflow-hidden bg-[#ede6d9] px-6 py-7 sm:px-12 sm:py-10 lg:px-[clamp(3rem,7vw,7.5rem)] lg:py-12">
           <div className="mx-auto flex w-full max-w-[515px] items-center justify-between lg:justify-end">
             <div className="lg:hidden">
-              <VirasaMark />
+              <VirasaLogo animated />
             </div>
 
-            <div className="flex items-center gap-2 text-[9px] uppercase tracking-[.17em] text-[#927e5c]">
+            <div className="flex items-center gap-2 text-[9px] uppercase tracking-[.17em] text-[#6f5c40]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#9b5d48]" />
               Archive access
             </div>
@@ -210,70 +250,120 @@ export default function Login() {
 
               <div className="max-w-[360px]">
                 <p className="mb-4 font-['Space_Mono'] text-[9px] uppercase tracking-[.18em] text-[#9a8052]">
-                  {isRegister ? '02 / join the archive' : '01 / keeper sign-in'}
+                  {isRegister
+                    ? '02 / join the archive'
+                    : isForgot
+                      ? '03 / recover access'
+                      : isMfa
+                        ? '04 / verify identity'
+                        : '01 / keeper sign-in'}
                 </p>
 
                 <h1 className="font-['Cormorant_Garamond'] text-[clamp(2.45rem,4vw,3.65rem)] font-semibold leading-[.9] tracking-[-.03em] text-[#29241d]">
-                  {isRegister ? 'Become a keeper' : 'Welcome back'}
+                  {isRegister ? 'Become a keeper' : isForgot ? 'Recover access' : isMfa ? 'One more step' : 'Welcome back'}
 
                   <span className="mt-1 block font-['Noto_Serif_Devanagari'] text-[clamp(1.65rem,3vw,2.4rem)] font-normal leading-[1.1]">
-                    {isRegister ? 'संग्रहकर्ता बनें' : 'स्वागत है'}
+                    {isRegister ? 'संग्रहकर्ता बनें' : isForgot ? 'पहुँच पुनः प्राप्त करें' : isMfa ? 'पहचान सत्यापित करें' : 'स्वागत है'}
                   </span>
                 </h1>
 
                 <p className="mt-5 font-['Kalam'] text-[14px] italic leading-snug text-[#6f5e4a]">
                   {isRegister
                     ? 'Claim your studio. Give your work a verifiable provenance record.'
-                    : 'Preserve the trace. Carry the craft forward.'}
+                    : isForgot
+                      ? 'We will send a secure, single-use reset link to your email.'
+                      : isMfa
+                        ? 'Use the rotating code from your authenticator app.'
+                        : 'Preserve the trace. Carry the craft forward.'}
                 </p>
               </div>
 
               <form className="mt-9 space-y-6" onSubmit={handleSubmit}>
                 {isRegister && (
+                  <>
+                    <Field
+                      id="name"
+                      label="Name exactly as on PEHCHAN card"
+                      hint="identity match"
+                      icon={UserRound}
+                      value={name}
+                      onChange={setName}
+                      autoComplete="name"
+                    />
+                    <Field
+                      id="pehchan-id"
+                      label="PEHCHAN ID"
+                      hint="required"
+                      icon={ShieldCheck}
+                      value={pehchanId}
+                      onChange={(value) => setPehchanId(value.toUpperCase().replace(/[^A-Z0-9/-]/g, '').slice(0, 32))}
+                      placeholder="Enter the ID printed on your card"
+                    />
+                    <div className="grid gap-6 sm:grid-cols-2">
+                      <Field id="craft" label="Registered craft" hint="match" icon={Palette} value={craft} onChange={setCraft} placeholder="Madhubani painting" />
+                      <Field id="village" label="Village or town" hint="match" icon={MapPin} value={village} onChange={setVillage} placeholder="Ranti" />
+                      <Field id="district" label="District" hint="match" icon={MapPin} value={district} onChange={setDistrict} placeholder="Madhubani" />
+                      <Field id="state" label="State" hint="match" icon={MapPin} value={state} onChange={setState} placeholder="Bihar" />
+                    </div>
+                    <div className="border-l-2 border-[#b89a57] bg-[#f4ecdc] px-4 py-3 text-[11px] leading-5 text-[#665744]">
+                      Virasā stores your PEHCHAN ID for administrator review against the official Handicrafts artisan database. We do not ask for or store your Aadhaar number.
+                    </div>
+                  </>
+                )}
+
+                {!isMfa && (
                   <Field
-                    id="name"
-                    label="Name"
-                    hint="public"
-                    icon={UserRound}
-                    value={name}
-                    onChange={setName}
+                    id="email"
+                    label="Email"
+                    hint={isRegister ? 'your email' : 'private'}
+                    icon={Mail}
+                    value={email}
+                    onChange={setEmail}
                   />
                 )}
 
-                <Field
-                  id="email"
-                  label="Email"
-                  hint={isRegister ? 'your email' : 'transparent'}
-                  icon={Mail}
-                  value={email}
-                  onChange={setEmail}
-                />
+                {!isForgot && !isMfa && (
+                  <Field
+                    id="password"
+                    label="Password"
+                    hint={isRegister ? '10+ characters' : 'password'}
+                    type={revealed ? 'text' : 'password'}
+                    icon={KeyRound}
+                    value={password}
+                    onChange={setPassword}
+                    autoComplete={isRegister ? 'new-password' : 'current-password'}
+                    trailing={
+                      <button
+                        type="button"
+                        aria-label={revealed ? 'Hide password' : 'Show password'}
+                        onClick={() => setRevealed((value) => !value)}
+                        className="text-[#8e7e65] transition-colors hover:text-[#9b5d48]"
+                      >
+                        {revealed ? (
+                          <EyeOff className="h-[16px] w-[16px]" strokeWidth={1.35} />
+                        ) : (
+                          <Eye className="h-[16px] w-[16px]" strokeWidth={1.35} />
+                        )}
+                      </button>
+                    }
+                  />
+                )}
 
-                <Field
-                  id="password"
-                  label="Password"
-                  hint="password"
-                  type={revealed ? 'text' : 'password'}
-                  icon={KeyRound}
-                  value={password}
-                  onChange={setPassword}
-                  trailing={
-                    <button
-                      type="button"
-                      aria-label={revealed ? 'Hide password' : 'Show password'}
-                      onClick={() => setRevealed((value) => !value)}
-                      className="text-[#8e7e65] transition-colors hover:text-[#9b5d48]"
-                    >
-                      {revealed ? (
-                        <EyeOff className="h-[16px] w-[16px]" strokeWidth={1.35} />
-                      ) : (
-                        <Eye className="h-[16px] w-[16px]" strokeWidth={1.35} />
-                      )}
-                    </button>
-                  }
-                />
+                {isMfa && (
+                  <Field
+                    id="mfa-code"
+                    label="Authenticator code"
+                    hint="6 digits"
+                    icon={ShieldCheck}
+                    value={mfaCode}
+                    onChange={(value) => setMfaCode(value.replace(/\D/g, '').slice(0, 6))}
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    placeholder="000000"
+                  />
+                )}
 
-                <div className="flex items-center justify-between gap-4 pt-0.5">
+                {!isRegister && !isForgot && !isMfa && <div className="flex items-center justify-between gap-4 pt-0.5">
                   <button
                     type="button"
                     onClick={() => setRemember((value) => !value)}
@@ -294,26 +384,22 @@ export default function Login() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      setNotice(
-                        'Resets are handled by the archive team — ask your administrator, or run: npm run reset-password -- <email> <new password>',
-                      )
-                    }
+                    onClick={() => { setMode('forgot'); setNotice(''); }}
                     className="text-[11px] text-[#917342] underline decoration-[#c4ae7d] underline-offset-4 transition-colors hover:text-[#9b5d48]"
                   >
                     Forgot password?
                   </button>
-                </div>
+                </div>}
 
                 <button
                   type="submit"
                   disabled={busy}
                   className="group flex w-full items-center justify-center gap-3 bg-[#29251f] px-5 py-3.5 text-[11px] uppercase tracking-[.14em] text-[#f5efe1] shadow-[0_4px_0_#b89a57] transition-transform hover:-translate-y-0.5 hover:bg-[#3b3127] active:translate-y-0 disabled:translate-y-0 disabled:opacity-60"
                 >
-                  <span>{isRegister ? 'Create your account' : 'Sign in to the archive'}</span>
+                  <span>{isRegister ? 'Create your account' : isForgot ? 'Send reset link' : isMfa ? 'Verify and continue' : 'Sign in to the archive'}</span>
 
                   <span className="font-['Noto_Serif_Devanagari'] text-[11px] normal-case tracking-normal text-[#cfb982]">
-                    {isRegister ? 'खाता बनाएँ' : 'संग्रह में प्रवेश करें'}
+                    {isRegister ? 'खाता बनाएँ' : isForgot ? 'लिंक भेजें' : isMfa ? 'सत्यापित करें' : 'संग्रह में प्रवेश करें'}
                   </span>
 
                   <ArrowUpRight className="h-3.5 w-3.5 text-[#b89a57] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
@@ -335,10 +421,10 @@ export default function Login() {
                 <span className="h-px flex-1 bg-[#d6c9b5]" />
               </div>
 
-              {isRegister ? (
+              {isRegister || isForgot || isMfa ? (
                 <button
                   type="button"
-                  onClick={() => { setMode('login'); setNotice(''); }}
+                  onClick={() => { setMode('login'); setNotice(''); setMfaChallenge(''); setMfaCode(''); }}
                   className="group flex w-full items-center justify-center gap-2 border border-[#98866a] px-5 py-3 text-[11px] uppercase tracking-[.13em] text-[#514638] transition-colors hover:border-[#9b5d48] hover:text-[#9b5d48]"
                 >
                   <span>Back to sign in</span>
@@ -367,7 +453,7 @@ export default function Login() {
             </div>
           </div>
 
-          <footer className="mx-auto flex w-full max-w-[515px] items-end justify-between gap-4 border-t border-[#d2c5b3] pt-4 text-[9px] uppercase tracking-[.13em] text-[#9e8c70]">
+          <footer className="mx-auto flex w-full max-w-[515px] items-end justify-between gap-4 border-t border-[#d2c5b3] pt-4 text-[9px] uppercase tracking-[.13em] text-[#695c49]">
             <span>Virasā · Heritage provenance system</span>
 
             <span className="font-['Space_Mono'] text-[8px]">Registration 2026</span>

@@ -9,9 +9,14 @@
     "dev": "concurrently -n server,client -c yellow,cyan \"npm start --prefix server\" \"npm run dev --prefix client\"",
     "build": "npm run build --prefix client",
     "test": "npm test --prefix server",
+    "test:e2e": "playwright test e2e/virasa.spec.js",
+    "test:a11y": "playwright test e2e/accessibility.spec.js",
+    "test:all": "npm test --prefix server && npm test --prefix client -- --run && npm run build && playwright test",
     "start": "cross-env NODE_ENV=production node server/index.js"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.63.0",
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3"
   }

@@ -19,12 +19,19 @@ export function verifyPassword(password, stored) {
 }
 
 export function publicUser(row) {
+  const artisan = row.artisan_id
+    ? db.prepare('SELECT pehchan_id, pehchan_verification_status FROM artisans WHERE id = ?').get(row.artisan_id)
+    : null;
   return {
     id: row.id,
     name: row.name,
     email: row.email,
     role: row.role,
     artisanId: row.artisan_id || null,
+    emailVerified: Boolean(row.email_verified),
+    mfaEnabled: Boolean(row.mfa_enabled),
+    pehchanId: artisan?.pehchan_id || null,
+    pehchanVerificationStatus: artisan?.pehchan_verification_status || null,
   };
 }
 
@@ -71,17 +78,18 @@ export function clearSessionCookie(res) {
   });
 }
 
-export function createSession(userId, ttlMs = SESSION_TTL_MS) {
+export function createSession(userId, ttlMs = SESSION_TTL_MS, { mfaVerified = false } = {}) {
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + ttlMs).toISOString();
-  db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, userId, expiresAt);
+  db.prepare('INSERT INTO sessions (token, user_id, expires_at, mfa_verified) VALUES (?, ?, ?, ?)').run(token, userId, expiresAt, mfaVerified ? 1 : 0);
   return token;
 }
 
 export function findSession(token) {
   if (!token) return null;
   const row = db.prepare(`
-    SELECT s.token, s.user_id, s.expires_at, u.name, u.email, u.role, u.artisan_id
+    SELECT s.token, s.user_id, s.expires_at, s.mfa_verified,
+           u.name, u.email, u.role, u.artisan_id, u.email_verified, u.mfa_enabled
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token = ?
   `).get(token);
@@ -102,7 +110,13 @@ export function currentUser(req) {
 }
 
 export function isPrivilegedRequest(req) {
-  return Boolean(req.apiKeyAuthenticated || req.user?.role === 'admin');
+  if (req.apiKeyAuthenticated) return true;
+  return hasAdminAccess(req.user);
+}
+
+export function hasAdminAccess(user) {
+  if (user?.role !== 'admin') return false;
+  return process.env.REQUIRE_ADMIN_MFA !== 'true' || Boolean(user.mfa_verified);
 }
 
 export function requireUser(roles = []) {
@@ -111,6 +125,9 @@ export function requireUser(roles = []) {
     if (!user) return res.status(401).json({ error: 'Not authenticated' });
     if (roles.length > 0 && !roles.includes(user.role)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    if (user.role === 'admin' && process.env.REQUIRE_ADMIN_MFA === 'true' && !user.mfa_verified) {
+      return res.status(403).json({ error: 'Administrator MFA verification required', code: 'MFA_REQUIRED' });
     }
     req.user = user;
     next();

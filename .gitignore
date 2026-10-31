@@ -7,5 +7,10 @@ server/kalachain.db
 server/kalachain.db-wal
 server/kalachain.db-shm
 server/uploads/
+server/backups/
+playwright-report/
+test-results/
 *.log
 server-log.txt
+.ppt-build/
+ppt-output/

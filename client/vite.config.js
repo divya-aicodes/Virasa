@@ -14,8 +14,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
-        manualChunks: {
-          motion: ['framer-motion'],
+        manualChunks(id) {
+          if (id.includes('node_modules/framer-motion')) return 'motion';
+          return undefined;
         },
       },
     },
@@ -23,8 +24,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:3001',
-      '/uploads': 'http://localhost:3001',
+      '/api': process.env.VITE_API_TARGET || 'http://localhost:3001',
+      '/uploads': process.env.VITE_API_TARGET || 'http://localhost:3001',
     },
   },
 });

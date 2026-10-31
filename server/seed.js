@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import db, { UPLOAD_DIR } from './db.js';
-import { makeHash } from './lib/hashchain.js';
+import { appendRevision } from './lib/ledger.js';
+import { recordConsents } from './lib/privacy.js';
 import { hashPassword } from './lib/auth.js';
 import { assertSafeProductionSeed } from './lib/security.js';
 
@@ -157,8 +158,11 @@ if (existingArtisans === 0) {
 
 const existingProducts = db.prepare('SELECT COUNT(*) AS n FROM products').get().n;
 if (existingProducts === 0) {
-  const insProd = db.prepare(`INSERT INTO products (id, artisan_id, title, description, image, steps, materials, price, category, hash, prev_hash, chain_index, created_at)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const insProd = db.prepare(`INSERT INTO products
+    (id, artisan_id, title, description, image, steps, materials, price, category,
+     hash, prev_hash, chain_index, created_at, status, verification_status,
+     owner_approved, approved_at, latest_revision)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'GENESIS', ?, ?, 'verified', 'verified', 1, ?, 0)`);
 
   for (let i = 0; i < products.length; i++) {
     const p = products[i];
@@ -173,20 +177,33 @@ if (existingProducts === 0) {
       image, steps: JSON.stringify(steps), materials: JSON.stringify(p.materials),
       price: p.price, category: p.category, created_at: new Date().toISOString(),
     };
-    const { hash, prevHash } = makeHash(fields);
-    const chainIndex = i + 1;
-    insProd.run(fields.id, fields.artisan_id, fields.title, fields.description, image, fields.steps, fields.materials, p.price, p.category, hash, prevHash, chainIndex, fields.created_at);
+    const chainIndex = db.prepare('SELECT COALESCE(MAX(id), 0) + 1 AS n FROM product_revisions').get().n;
+    insProd.run(fields.id, fields.artisan_id, fields.title, fields.description, image, fields.steps, fields.materials, p.price, p.category, chainIndex, fields.created_at, fields.created_at);
+    appendRevision(fields.id, { action: 'created', reason: 'Seeded verified heritage record', actorRole: 'system' });
+
+    const evidenceInsert = db.prepare(`
+      INSERT INTO evidence_items
+        (id, product_id, evidence_type, url, mime_type, caption, verification_status, created_at)
+      VALUES (?, ?, ?, ?, 'image/svg+xml', ?, 'verified', ?)
+    `);
+    evidenceInsert.run(`EVD-${p.id}-MAIN`, p.id, 'primary', image, 'Primary artwork image', fields.created_at);
+    steps.forEach((item, stepIndex) => {
+      evidenceInsert.run(`EVD-${p.id}-${stepIndex + 1}`, p.id, 'process', item.image, item.caption, fields.created_at);
+    });
   }
   console.log(`Seeded ${products.length} products (chain of ${products.length} blocks)`);
 }
 
 console.log('Seed complete. Chain blocks:', db.prepare('SELECT COUNT(*) AS n FROM products').get().n);
 
-const insertUser = db.prepare('INSERT INTO users (id, name, email, password_hash, role, artisan_id) VALUES (?, ?, ?, ?, ?, ?)');
+const insertUser = db.prepare(`
+  INSERT INTO users (id, name, email, password_hash, role, artisan_id, email_verified, email_verified_at)
+  VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+`);
 const seedUser = (id, name, email, password, role, artisanId = null) => {
   const normalized = email.toLowerCase();
   if (!db.prepare('SELECT id FROM users WHERE email = ?').get(normalized)) {
-    insertUser.run(id, name, normalized, hashPassword(password), role, artisanId);
+    insertUser.run(id, name, normalized, hashPassword(password), role, artisanId, new Date().toISOString());
     return true;
   }
   return false;
@@ -200,4 +217,16 @@ if (seedUser('USR-ADMIN1', 'Archive Admin', process.env.ADMIN_EMAIL || 'admin@vi
 }
 if (seedUser('USR-ART001', 'Sunita Devi', process.env.ARTISAN_EMAIL || 'sunita@virasa.in', artisanPassword, 'artisan', 'ART-MITHILA1')) {
   console.log('Seeded artisan account');
+}
+
+for (const artisan of db.prepare('SELECT id FROM artisans').all()) {
+  const hasConsent = db.prepare('SELECT 1 FROM artisan_consents WHERE artisan_id = ? LIMIT 1').get(artisan.id);
+  if (!hasConsent) {
+    recordConsents(artisan.id, null, {
+      public_profile: true,
+      location: true,
+      media: true,
+      certificate: true,
+    }, 'Seeded demonstration record');
+  }
 }

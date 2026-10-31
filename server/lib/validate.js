@@ -6,10 +6,35 @@ export function httpError(status, message) {
 }
 
 const ID_PATTERN = /^[A-Z0-9-]{1,20}$/;
+const PEHCHAN_PATTERN = /^[A-Z0-9/-]{4,32}$/;
 const IMAGE_PATTERN = /^\/uploads\/[A-Za-z0-9._-]+\.(png|jpe?g|webp|svg)$/i;
+
+function isImage(value) {
+  if (IMAGE_PATTERN.test(value)) return true;
+  const cdnBase = String(process.env.CDN_BASE_URL || '').replace(/\/$/, '');
+  if (!cdnBase || !/^https:\/\//i.test(value)) return false;
+  try {
+    const url = new URL(value);
+    const base = new URL(cdnBase);
+    return url.origin === base.origin && url.pathname.startsWith(`${base.pathname.replace(/\/$/, '')}/`) && /\.(png|jpe?g|webp)$/i.test(url.pathname);
+  } catch { return false; }
+}
 
 function isString(v, max) {
   return typeof v === 'string' && v.trim().length > 0 && v.trim().length <= max;
+}
+
+export function normalizePehchanId(value) {
+  return String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+export function validatePehchanId(value, { required = false } = {}) {
+  const normalized = normalizePehchanId(value);
+  if (!normalized && !required) return { ok: true, value: '' };
+  if (!PEHCHAN_PATTERN.test(normalized)) {
+    return { ok: false, error: 'PEHCHAN ID must be 4–32 letters, numbers, hyphens, or slashes' };
+  }
+  return { ok: true, value: normalized };
 }
 
 export function validateArtisan(body) {
@@ -20,7 +45,7 @@ export function validateArtisan(body) {
   if (b.bio !== undefined && b.bio !== null && (typeof b.bio !== 'string' || b.bio.length > 500)) {
     return { ok: false, error: 'bio must be 500 characters or fewer' };
   }
-  if (b.photo !== undefined && b.photo !== null && b.photo !== '' && !IMAGE_PATTERN.test(b.photo)) {
+  if (b.photo !== undefined && b.photo !== null && b.photo !== '' && !isImage(b.photo)) {
     return { ok: false, error: 'photo must be a valid uploaded image path' };
   }
   if (b.state !== undefined && b.state !== null && b.state !== '' && !isString(b.state, 50)) {
@@ -29,6 +54,8 @@ export function validateArtisan(body) {
   if (b.district !== undefined && b.district !== null && b.district !== '' && !isString(b.district, 50)) {
     return { ok: false, error: 'district must be 1–50 characters' };
   }
+  const pehchan = validatePehchanId(b.pehchanId ?? b.pehchan_id);
+  if (!pehchan.ok) return pehchan;
   return {
     ok: true,
     value: {
@@ -39,6 +66,7 @@ export function validateArtisan(body) {
       district: (b.district || '').trim().slice(0, 50),
       bio: (b.bio || '').slice(0, 500),
       photo: b.photo || '',
+      pehchanId: pehchan.value,
     },
   };
 }
@@ -55,7 +83,7 @@ export function validateProduct(body) {
   if (typeof b.price !== 'number' || !Number.isFinite(b.price) || b.price < 0 || b.price > 10_000_000) {
     return { ok: false, error: 'price must be a number between 0 and 10,000,000' };
   }
-  if (!isString(b.image, 300) || !IMAGE_PATTERN.test(b.image.trim())) {
+  if (!isString(b.image, 500) || !isImage(b.image.trim())) {
     return { ok: false, error: 'image must be a valid uploaded image path' };
   }
   if (b.category !== undefined && b.category !== null && b.category !== '' && !isString(b.category, 60)) {
@@ -66,7 +94,7 @@ export function validateProduct(body) {
   }
   const steps = [];
   for (const s of b.steps) {
-    if (!s || typeof s !== 'object' || !isString(s.image, 300) || !IMAGE_PATTERN.test(s.image) ||
+    if (!s || typeof s !== 'object' || !isString(s.image, 500) || !isImage(s.image) ||
         (s.caption !== undefined && (typeof s.caption !== 'string' || s.caption.length > 80))) {
       return { ok: false, error: 'each step must have a valid image and a caption of 80 characters or fewer' };
     }

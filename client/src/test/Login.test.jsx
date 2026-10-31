@@ -114,15 +114,53 @@ describe('Login page', () => {
 
     await user.click(screen.getByRole('button', { name: /request access/i }));
     await user.type(screen.getByLabelText(/^name/i), 'New Keeper');
+    await user.type(screen.getByLabelText(/^pehchan id/i), 'PCH-NEW-101');
+    await user.type(screen.getByLabelText(/^registered craft/i), 'Madhubani painting');
+    await user.type(screen.getByLabelText(/^village or town/i), 'Ranti');
+    await user.type(screen.getByLabelText(/^district/i), 'Madhubani');
+    await user.type(screen.getByLabelText(/^state/i), 'Bihar');
     await user.type(screen.getByLabelText(/^email/i), 'new@example.com');
     await user.type(screen.getByLabelText(/^password/i), 'keeper-pass-123');
     await user.click(screen.getByRole('button', { name: /create your account/i }));
 
-    expect(await screen.findByText(/account created\. sign in to continue/i)).toBeTruthy();
+    expect(await screen.findByText(/account created\. check your email/i)).toBeTruthy();
     expect(screen.getByRole('heading', { name: /welcome back/i })).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/register',
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('requests a password reset without disclosing account existence', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.click(screen.getByRole('button', { name: /forgot password/i }));
+    await user.type(screen.getByLabelText(/^email/i), 'unknown@example.com');
+    await user.click(screen.getByRole('button', { name: /send reset link/i }));
+
+    expect(await screen.findByText(/if that account exists/i)).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/forgot-password', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('completes an administrator MFA challenge', async () => {
+    const fetchMock = vi.fn(async (url) => {
+      if (url === '/api/auth/login') return { ok: true, json: async () => ({ mfaRequired: true, challengeToken: 'challenge-1' }) };
+      if (url === '/api/auth/mfa/login') return { ok: true, json: async () => ({ user: { id: 'USR-ADMIN1', role: 'admin' } }) };
+      return { ok: false, json: async () => ({ error: 'Not signed in' }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.type(screen.getByLabelText(/^email/i), 'admin@virasa.in');
+    await user.type(screen.getByLabelText(/^password/i), 'admin-virasa-2026');
+    await user.click(screen.getByRole('button', { name: /sign in to the archive/i }));
+    await user.type(await screen.findByLabelText(/authenticator code/i), '123456');
+    await user.click(screen.getByRole('button', { name: /verify and continue/i }));
+
+    expect(await screen.findByText('ADMIN DASHBOARD')).toBeTruthy();
   });
 });

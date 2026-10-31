@@ -1,70 +1,85 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import 'regenerator-runtime/runtime.js';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import QRCode from 'qrcode';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const GOLD = rgb(0.83, 0.69, 0.32);
-const DARK = rgb(0.10, 0.09, 0.14);
-const MUTED = rgb(0.35, 0.33, 0.42);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FONT_PATH = path.join(__dirname, '..', 'assets', 'NotoSansDevanagari-Regular.ttf');
+const GOLD = rgb(0.69, 0.54, 0.20);
+const DARK = rgb(0.17, 0.14, 0.11);
+const MUTED = rgb(0.39, 0.35, 0.30);
+const GREEN = rgb(0.20, 0.38, 0.25);
 
-// pdf-lib's built-in standard fonts only support the Latin-1 (WinAnsi) set.
-// Normalise to an ASCII-safe representation so names, titles and brand copy
-// with diacritics (e.g. "Virasā") or fallback scripts render without crashing.
-const LATIN1_MAP = { '\u0152': 'OE', '\u0153': 'oe', '\u0178': 'Y', '\u20B9': 'Rs.' };
-function pdfSafe(value) {
-  const normalized = String(value ?? '')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '');
-  let out = '';
-  for (const ch of normalized) {
-    const code = ch.codePointAt(0);
-    if (code <= 0xff) out += ch;
-    else out += LATIN1_MAP[ch] || '';
-  }
-  return out;
+function fitText(font, value, maxWidth, initialSize, minSize = 8) {
+  const text = String(value ?? '');
+  let size = initialSize;
+  while (size > minSize && font.widthOfTextAtSize(text, size) > maxWidth) size -= 0.5;
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return { text, size };
+  let trimmed = text;
+  while (trimmed.length > 1 && font.widthOfTextAtSize(`${trimmed}…`, size) > maxWidth) trimmed = trimmed.slice(0, -1);
+  return { text: `${trimmed}…`, size };
+}
+function drawFitted(page, font, value, options) {
+  const fitted = fitText(font, value, options.maxWidth, options.size, options.minSize);
+  page.drawText(fitted.text, { ...options, size: fitted.size, font });
 }
 
 export async function generateCertificate({ product, artisan, verifyUrl, verify }) {
   const doc = await PDFDocument.create();
+  doc.registerFontkit(fontkit);
+  const fontBytes = await fs.readFile(FONT_PATH);
+  const font = await doc.embedFont(fontBytes, { subset: true });
   const page = doc.addPage([595, 842]);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const italic = await doc.embedFont(StandardFonts.HelveticaOblique);
 
-  page.drawRectangle({ x: 0, y: 0, width: 595, height: 842, color: rgb(1, 1, 1) });
+  page.drawRectangle({ x: 0, y: 0, width: 595, height: 842, color: rgb(0.992, 0.98, 0.94) });
+  page.drawRectangle({ x: 40, y: 40, width: 515, height: 762, borderColor: GOLD, borderWidth: 2 });
+  page.drawRectangle({ x: 47, y: 47, width: 501, height: 748, borderColor: rgb(0.82, 0.78, 0.68), borderWidth: 0.6 });
 
-  page.drawRectangle({ x: 40, y: 40, width: 515, height: 762, color: rgb(1, 1, 1), borderColor: GOLD, borderWidth: 2 });
+  page.drawText('Virasā', { x: 60, y: 758, size: 28, font, color: DARK });
+  page.drawText('विरासत · प्रमाणित उत्पत्ति', { x: 60, y: 731, size: 12, font, color: GOLD });
+  page.drawText('CERTIFICATE OF PROVENANCE', { x: 60, y: 702, size: 9, font, color: MUTED, characterSpacing: 1.5 });
 
-  page.drawText(pdfSafe('Virasā'), { x: 60, y: 760, size: 26, font: bold, color: DARK });
-  page.drawText('Certificate of Authenticity', { x: 60, y: 734, size: 13, font: italic, color: GOLD });
-
-  page.drawText('This certifies that the following handmade artwork', { x: 60, y: 660, size: 11, font, color: MUTED });
-  page.drawText(pdfSafe(product.title), { x: 60, y: 638, size: 24, font: bold, color: DARK });
+  page.drawText('This certificate records the verified maker, place, evidence and revision history of', { x: 60, y: 661, size: 9.5, font, color: MUTED });
+  drawFitted(page, font, product.title, { x: 60, y: 627, size: 23, minSize: 13, maxWidth: 470, color: DARK });
 
   const materials = JSON.parse(product.materials || '[]');
-  const steps = JSON.parse(product.steps || '[]');
   const craftLine = product.category || artisan.craft;
+  const lines = [
+    ['Artisan / शिल्पकार', artisan.name],
+    ['Craft / शिल्प', craftLine],
+    ['Place / स्थान', `${artisan.village}${artisan.state ? `, ${artisan.state}` : ''}`],
+    ['Materials / सामग्री', materials.join(', ') || 'Not recorded'],
+    ['Accession ID', product.id],
+    ['Revision', `${verify.revision} · ledger entry ${verify.chainIndex} of ${verify.chainLength}`],
+  ];
 
-  let y = 590;
-  page.drawText(`Artisan: ${pdfSafe(artisan.name)}`, { x: 60, y, size: 12, font, color: DARK }); y -= 20;
-  page.drawText(`Craft: ${pdfSafe(craftLine)}`, { x: 60, y, size: 12, font, color: DARK }); y -= 20;
-  page.drawText(`Village: ${pdfSafe(artisan.village)}${artisan.state ? `, ${pdfSafe(artisan.state)}` : ''}`, { x: 60, y, size: 12, font, color: DARK }); y -= 20;
-  page.drawText(`Materials: ${pdfSafe(materials.join(', ')) || 'Handmade paper, natural pigments'}`, { x: 60, y, size: 12, font, color: DARK }); y -= 24;
-  page.drawText(`Steps documented: ${steps.length}`, { x: 60, y, size: 12, font, color: DARK }); y -= 20;
-  page.drawText(`Product ID: ${product.id}`, { x: 60, y, size: 12, font, color: GOLD }); y -= 20;
-  page.drawText(`Chain Index: #${product.chain_index} of ${verify.chainLength}`, { x: 60, y, size: 12, font, color: GOLD }); y -= 20;
-  page.drawText(`Status: ${verify.valid ? 'CHAIN VERIFIED' : 'INVALID'}`, { x: 60, y, size: 13, font: bold, color: verify.valid ? rgb(0.05, 0.55, 0.28) : rgb(0.8, 0.1, 0.1) }); y -= 28;
+  let y = 579;
+  for (const [label, value] of lines) {
+    page.drawText(label.toUpperCase(), { x: 60, y, size: 7.5, font, color: GOLD, characterSpacing: 0.5 });
+    drawFitted(page, font, value, { x: 195, y: y - 1, size: 11, minSize: 8, maxWidth: 330, color: DARK });
+    y -= 27;
+  }
 
-  page.drawText('Scan to verify authenticity:', { x: 60, y, size: 10, font, color: MUTED });
+  page.drawRectangle({ x: 60, y: 376, width: 475, height: 42, color: rgb(0.92, 0.94, 0.89), borderColor: GREEN, borderWidth: 0.7 });
+  page.drawText('✓  VERIFIED RECORD', { x: 76, y: 391, size: 12, font, color: GREEN });
+  page.drawText(`SHA-256  ${product.hash}`, { x: 205, y: 393, size: 6.4, font, color: MUTED });
 
-  const qrPng = await QRCode.toBuffer(verifyUrl, { width: 280, margin: 1 });
+  const qrPng = await QRCode.toBuffer(verifyUrl, { width: 300, margin: 1, errorCorrectionLevel: 'M' });
   const qrImg = await doc.embedPng(qrPng);
-  page.drawImage(qrImg, { x: 60, y: y - 130, width: 130, height: 130 });
+  page.drawImage(qrImg, { x: 60, y: 193, width: 145, height: 145 });
+  page.drawText('SCAN TO VERIFY', { x: 74, y: 176, size: 8, font, color: GOLD, characterSpacing: 1 });
 
-  page.drawText(`Verification link: ${pdfSafe(verifyUrl)}`, { x: 210, y: y - 60, size: 9, font, color: MUTED });
-  page.drawText(`SHA-256: ${product.hash.slice(0, 40)}...`, { x: 210, y: y - 74, size: 8, font, color: MUTED });
+  page.drawText('Public verification', { x: 235, y: 311, size: 10, font, color: GOLD });
+  drawFitted(page, font, verifyUrl, { x: 235, y: 291, size: 8, minSize: 6, maxWidth: 285, color: MUTED });
+  page.drawText('This record is backed by an append-only revision ledger.', { x: 235, y: 253, size: 9, font, color: DARK });
+  page.drawText('Corrections remain visible; earlier revisions are never erased.', { x: 235, y: 235, size: 9, font, color: DARK });
+  page.drawText('Evidence was reviewed before this certificate was issued.', { x: 235, y: 217, size: 9, font, color: DARK });
 
-  page.drawText('Every product is chained to the one before it.', { x: 60, y: 90, size: 10, font: italic, color: MUTED });
-  page.drawText('Tampering with any record breaks the chain and is instantly detectable.', { x: 60, y: 74, size: 10, font: italic, color: MUTED });
+  page.drawText('Virasā preserves provenance; it does not replace legal ownership documentation.', { x: 60, y: 91, size: 7.5, font, color: MUTED });
+  page.drawText('Generated from the live registry · Unicode text preserved', { x: 60, y: 72, size: 7.5, font, color: MUTED });
 
-  const bytes = await doc.save();
-  return Buffer.from(bytes);
+  return Buffer.from(await doc.save());
 }

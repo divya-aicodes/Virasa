@@ -17,10 +17,10 @@ RUN npm ci --prefix server --omit=dev
 COPY server/ ./server/
 COPY --from=build /app/client/dist ./client/dist
 
-# Seed idempotently on first start, then serve the API + built client.
+# Database migrations run during startup. Seed data is an explicit operator action.
 WORKDIR /app/server
 VOLUME ["/data"]
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3001/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
-CMD ["sh", "-c", "node seed.js && node index.js"]
+CMD ["node", "index.js"]

@@ -36,6 +36,7 @@ describe('App shell', () => {
     expect(screen.getByText('Collection')).toBeInTheDocument();
     expect(screen.getByText('For artisans')).toBeInTheDocument();
     expect(screen.getByText('Sign in')).toBeInTheDocument();
+    expect(screen.queryByText('Maintain')).toBeNull();
   });
 });
 
@@ -55,10 +56,11 @@ describe('RequireAdmin guard', () => {
     expect(await screen.findByText('Landing content')).toBeTruthy();
     expect(screen.queryByText('Manage')).toBeNull();
     expect(screen.queryByText('Admin')).toBeNull();
+    expect(screen.queryByText('Maintain')).toBeNull();
     expect(screen.getByText('Sunita Devi · Sign out')).toBeTruthy();
   });
 
-  it('keeps the admin toolbar clean for admins', async () => {
+  it('shows Maintain beside the primary links for admins', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -71,7 +73,7 @@ describe('RequireAdmin guard', () => {
     renderAt('/', <div>Landing content</div>);
 
     expect(await screen.findByText('Landing content')).toBeTruthy();
-    expect(screen.queryByText('Manage')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Maintain' })).toHaveAttribute('href', '/admin');
     expect(screen.getByText('Archive Admin · Sign out')).toBeTruthy();
   });
 

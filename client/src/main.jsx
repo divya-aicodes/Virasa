@@ -10,6 +10,7 @@ import VerifyPage from './pages/VerifyPage.jsx';
 import ArtisanPanel from './pages/ArtisanPanel.jsx';
 import Admin from './pages/Admin.jsx';
 import Login from './pages/Login.jsx';
+import AccountAction from './pages/AccountAction.jsx';
 import RequireAdmin from './components/RequireAdmin.jsx';
 import RequireAuth from './components/RequireAuth.jsx';
 import { AuthProvider } from './auth.jsx';
@@ -42,6 +43,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             />
           </Route>
           <Route path="/login" element={<Login />} />
+          <Route path="/verify-email" element={<AccountAction />} />
+          <Route path="/reset-password" element={<AccountAction />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

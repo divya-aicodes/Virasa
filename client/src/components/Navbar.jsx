@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { LogOut, Menu, ShieldCheck, X } from 'lucide-react';
 import { useAuth } from '../auth.jsx';
+import VirasaLogo from './VirasaLogo.jsx';
 
 const primaryLinks = [
   { to: '/', label: 'Home' },
@@ -38,6 +39,9 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  const visiblePrimaryLinks = user?.role === 'admin'
+    ? [...primaryLinks, { to: '/admin', label: 'Maintain' }]
+    : primaryLinks;
   const visibleLinks = user ? utilityLinks.filter((l) => l.to !== '/login') : utilityLinks;
 
   function confirmSignOut() {
@@ -61,7 +65,7 @@ export default function Navbar() {
     >
       <div className="relative mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
         <nav className="hidden items-center gap-8 md:flex" aria-label="Primary navigation">
-          {primaryLinks.map((link) => (
+          {visiblePrimaryLinks.map((link) => (
             <DesktopLink key={link.to} to={link.to}>{link.label}</DesktopLink>
           ))}
         </nav>
@@ -69,12 +73,9 @@ export default function Navbar() {
         <Link
           to="/"
           aria-label="Virasā home"
-          className="group md:absolute md:left-1/2 md:-translate-x-1/2"
+          className="md:absolute md:left-1/2 md:-translate-x-1/2"
         >
-          <span className="font-serif text-[2.15rem] font-medium leading-none tracking-[-0.035em] text-ink-900">
-            Virasā
-          </span>
-          <span className="mx-auto mt-1 block h-px w-8 bg-gold-500 transition-all duration-300 group-hover:w-14" />
+          <VirasaLogo animated size="nav" />
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex" aria-label="Utility navigation">
@@ -115,7 +116,7 @@ export default function Navbar() {
             aria-label="Mobile navigation"
           >
             <div className="grid grid-cols-2 gap-px bg-ink-900/15 p-px">
-              {[...primaryLinks, ...visibleLinks].map((link) => (
+              {[...visiblePrimaryLinks, ...visibleLinks].map((link) => (
                 <NavLink
                   key={link.to}
                   to={link.to}

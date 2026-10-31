@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import Reveal from '../components/ui/Reveal.jsx';
+import VirasaLogo from '../components/VirasaLogo.jsx';
 import { api } from '../lib/api.js';
 
 function shortHash(hash) {
@@ -67,10 +68,9 @@ export default function VerifyPage() {
           <section className="paper-sheet paper-texture relative mt-12 border border-[#c9bea8] bg-[#fbf7ed] px-5 py-7 shadow-[0_22px_60px_rgba(54,42,28,0.16)] sm:px-8 sm:py-9 lg:px-12 lg:py-11">
             <header className="flex items-start justify-between gap-8">
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-ink-900/60">
-                  Virasā · Mithila living archive
-                </p>
-                <h2 className="mt-2 font-serif text-3xl leading-tight sm:text-4xl">Certificate of Provenance</h2>
+                <VirasaLogo size="small" />
+                <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.24em] text-ink-900/55">Mithila living archive</p>
+                <h2 className="mt-3 font-serif text-3xl leading-tight sm:text-4xl">Certificate of Provenance</h2>
                 <p className="handwritten mt-1.5 text-base text-ink-800">A public record of hand, place, and process</p>
               </div>
               <div className="hidden shrink-0 text-right sm:block">
@@ -172,7 +172,7 @@ export default function VerifyPage() {
                       return (
                         <button
                           type="button"
-                          key={block.id}
+                          key={`${block.id}-${block.chain_index}`}
                           onClick={() => check(block.id)}
                           className={`grid w-full grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-3 border-t border-ink-900/12 px-2 py-3 text-left transition-colors first:border-t-0 ${
                             selected ? 'bg-[#e9e6d8] text-ink-900' : 'hover:bg-[#f2ecdf]'
@@ -184,7 +184,7 @@ export default function VerifyPage() {
                           <span className="min-w-0">
                             <span className="block truncate font-serif text-sm">{block.title}</span>
                             <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.12em] text-ink-900/60">
-                              {block.id}
+                              {block.id} · revision {block.revision_no}
                             </span>
                           </span>
                           <span className="hidden font-mono text-[10px] uppercase tracking-[0.08em] text-ink-900/55 sm:block">

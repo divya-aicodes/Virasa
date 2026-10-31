@@ -19,7 +19,7 @@ const T = {
     materials: 'Materials (press Enter to add)', price: 'Price (₹)',
     mainImage: 'Main artwork photo', stepImage: 'Creation step photo', stepCaption: 'Caption for this step',
     addStep: 'Add another step', addStepShort: 'Add step',
-    uploading: 'Uploading...', created: 'Chain created!',
+    uploading: 'Uploading...', created: 'Submitted for verification',
     yourArt: 'Your artwork', scan: 'Scan this QR anywhere to verify your art',
     cert: 'Download certificate', explore: 'See it in the collection',
     newProduct: 'Add another artwork',
@@ -35,7 +35,7 @@ const T = {
     materials: 'सामग्री (Enter दबाकर जोड़ें)', price: 'कीमत (₹)',
     mainImage: 'मुख्य कलाकृति फोटो', stepImage: 'बनाने के कदम की फोटो', stepCaption: 'इस कदम का विवरण',
     addStep: 'एक और कदम जोड़ें', addStepShort: 'कदम जोड़ें',
-    uploading: 'अपलोड हो रहा है...', created: 'श्रृंखला बन गई!',
+    uploading: 'अपलोड हो रहा है...', created: 'सत्यापन के लिए भेजा गया',
     yourArt: 'आपकी कलाकृति', scan: 'अपनी कला सत्यापित करने के लिए यह QR स्कैन करें',
     cert: 'प्रमाणपत्र डाउनलोड करें', explore: 'संग्रह में देखें',
     newProduct: 'एक और कलाकृति जोड़ें',
@@ -55,6 +55,8 @@ const FOLIOS = [
   { en: 'Certificate', hi: 'प्रमाणपत्र' },
 ];
 
+const defaultConsents = { public_profile: false, location: false, media: false, certificate: false };
+
 export default function ArtisanPanel() {
   const { user, refresh } = useAuth();
   const [lang, setLang] = useState('en');
@@ -68,20 +70,25 @@ export default function ArtisanPanel() {
   const [steps, setSteps] = useState(defaultSteps.map((s) => ({ ...s, image: null })));
   const [result, setResult] = useState(null);
   const [linkedArtisanId, setLinkedArtisanId] = useState(user?.artisanId || null);
+  const [artisanRecord, setArtisanRecord] = useState(null);
+  const [consents, setConsents] = useState(defaultConsents);
 
   useEffect(() => {
     if (!user?.artisanId) return;
     setLinkedArtisanId(user.artisanId);
-    api.artisans.get(user.artisanId)
-      .then((artisan) => {
+    Promise.all([api.artisans.get(user.artisanId), api.artisans.consents(user.artisanId)])
+      .then(([artisan, consentResult]) => {
+        setArtisanRecord(artisan);
         setProfile({ name: artisan.name, village: artisan.village, craft: artisan.craft });
+        setConsents({ ...defaultConsents, ...(consentResult.consents || {}) });
       })
       .catch(() => {});
   }, [user?.artisanId]);
 
   const t = T[lang];
   const alt = T[lang === 'en' ? 'hi' : 'en'];
-  const canContinue1 = profile.name && profile.village && profile.craft;
+  const pehchanVerified = artisanRecord?.pehchan_verification_status === 'verified';
+  const canContinue1 = pehchanVerified && profile.name && profile.village && profile.craft && consents.public_profile && consents.media && consents.certificate;
   const canContinue2 = product.title && mainImage;
 
   function setMaterial(e) {
@@ -104,10 +111,12 @@ export default function ArtisanPanel() {
     try {
       const artisan = linkedArtisanId
         ? await api.artisans.update(linkedArtisanId, profile)
-        : await api.artisans.create(profile);
+        : await api.artisans.create({ ...profile, consents });
       if (!linkedArtisanId) {
         setLinkedArtisanId(artisan.id);
         await refresh();
+      } else {
+        await api.artisans.updateConsents(artisan.id, consents, 'Updated during artwork submission');
       }
 
       const files = [mainImage, ...steps.filter((s) => s.image).map((s) => s.image)];
@@ -129,8 +138,13 @@ export default function ArtisanPanel() {
         price: Number(product.price) || 0,
       });
 
-      const check = await api.verify.check(created.id);
-      setResult({ product: created, verify: check.verify });
+      const submitted = await api.products.ownerApprove(
+        created.id,
+        'I confirm that I made or own this work and approve this provenance record for registry review.',
+      );
+
+      const check = await api.verify.check(submitted.id);
+      setResult({ product: submitted, verify: check.verify });
       setStep(2);
     } catch (e) {
       setError(e.message || 'Something went wrong');
@@ -223,6 +237,27 @@ export default function ArtisanPanel() {
                   </p>
                 </header>
 
+                {linkedArtisanId && (
+                  <div className={`mt-8 border-l-2 px-4 py-4 ${pehchanVerified ? 'border-green-800 bg-green-900/[0.04]' : artisanRecord?.pehchan_verification_status === 'rejected' ? 'border-red-800 bg-red-900/[0.04]' : 'border-amber-700 bg-amber-700/[0.05]'}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-900/75">
+                          <ShieldCheck className="h-4 w-4" /> PEHCHAN identity · {String(artisanRecord?.pehchan_verification_status || 'loading').replaceAll('_', ' ')}
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-ink-900/60">
+                          {pehchanVerified
+                            ? 'Your identity has been reviewed. You may submit work for publication.'
+                            : artisanRecord?.pehchan_verification_status === 'rejected'
+                              ? `Review could not be completed: ${artisanRecord?.pehchan_rejection_reason || 'contact the archive administrator.'}`
+                              : 'An archive administrator must match your PEHCHAN ID and profile with the official artisan database before you can publish work.'}
+                        </p>
+                        {artisanRecord?.pehchan_id && <p className="mt-2 font-mono text-[10px] text-ink-900/50">PEHCHAN ID · {artisanRecord.pehchan_id}</p>}
+                      </div>
+                      <a href="https://indian.handicrafts.gov.in/en/search" target="_blank" rel="noreferrer" className="text-[10px] font-semibold uppercase tracking-[0.13em] text-gold-700 underline underline-offset-4">Official artisan database</a>
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-10 grid gap-x-10 gap-y-9 sm:grid-cols-2">
                   <label className="group block sm:col-span-2">
                     <span className="flex items-baseline justify-between gap-4">
@@ -261,6 +296,31 @@ export default function ArtisanPanel() {
                     />
                   </label>
                 </div>
+
+                <fieldset className="mt-10 border border-ink-900/15 bg-white/25 p-5">
+                  <legend className="px-2 text-[11px] font-semibold uppercase tracking-[0.17em] text-ink-900/75">
+                    Consent and privacy · सहमति और गोपनीयता
+                  </legend>
+                  <p className="mb-4 text-xs leading-5 text-ink-900/55">Choose exactly what Virasā may publish. You can change these settings later; every change is recorded.</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {[
+                      ['public_profile', 'Publish my name and craft', true],
+                      ['media', 'Publish my artwork and process media', true],
+                      ['certificate', 'Allow provenance certificates', true],
+                      ['location', 'Publish my village and state', false],
+                    ].map(([key, label, required]) => (
+                      <label key={key} className="flex items-start gap-3 text-sm text-ink-900/75">
+                        <input
+                          type="checkbox"
+                          checked={consents[key]}
+                          onChange={(event) => setConsents((current) => ({ ...current, [key]: event.target.checked }))}
+                          className="mt-0.5 h-4 w-4 accent-[#9a7417]"
+                        />
+                        <span>{label}{required ? ' *' : ''}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
 
                 <footer className="mt-12 flex flex-col gap-6 border-t border-ink-900/15 pt-7 sm:flex-row sm:items-center sm:justify-between">
                   <p className="handwritten max-w-sm -rotate-1 font-serif text-sm italic leading-6 text-ink-900/45">
@@ -499,7 +559,7 @@ export default function ArtisanPanel() {
                   <p className="mt-3 text-xs text-ink-900/50">
                     <span className="font-mono text-gold-600">{result.product.id}</span>
                     <span className="mx-2">·</span>
-                    {t.yourArt} #{result.verify.chainIndex} of {result.verify.chainLength}
+                    {t.yourArt} · revision {result.verify?.revision || 1} · awaiting administrator review
                   </p>
                 </header>
 
@@ -518,12 +578,18 @@ export default function ArtisanPanel() {
                       {t.scan} <span className="text-gold-500/60">·</span> {alt.scan}
                     </p>
                     <div className="mt-7 flex flex-col gap-3">
-                      <a
-                        href={`/api/verify/${result.product.id}/certificate`}
-                        className="editorial-button inline-flex items-center justify-center gap-2 bg-ink-900 px-5 py-3 text-xs font-semibold uppercase tracking-[0.1em] text-paper-100 transition hover:-translate-y-0.5"
-                      >
-                        <Download className="h-4 w-4" /> {t.cert}
-                      </a>
+                      {result.product.status === 'verified' ? (
+                        <a
+                          href={`/api/verify/${result.product.id}/certificate`}
+                          className="editorial-button inline-flex items-center justify-center gap-2 bg-ink-900 px-5 py-3 text-xs font-semibold uppercase tracking-[0.1em] text-paper-100 transition hover:-translate-y-0.5"
+                        >
+                          <Download className="h-4 w-4" /> {t.cert}
+                        </a>
+                      ) : (
+                        <div className="border border-gold-500/35 bg-gold-500/5 px-4 py-3 text-xs leading-5 text-ink-900/65">
+                          Your ownership approval is recorded. The certificate becomes available after an administrator verifies the evidence.
+                        </div>
+                      )}
                       <Link
                         to={`/verify?id=${result.product.id}`}
                         className="editorial-button-outline inline-flex items-center justify-center gap-2 border border-gold-500/45 px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-gold-600 transition hover:bg-gold-500/5"

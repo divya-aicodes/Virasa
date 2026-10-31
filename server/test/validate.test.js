@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateArtisan, validateProduct } from '../lib/validate.js';
+import { normalizePehchanId, validateArtisan, validatePehchanId, validateProduct } from '../lib/validate.js';
 
 const validImage = '/uploads/foo.png';
 
@@ -27,6 +27,12 @@ test('validateArtisan accepts optional state and district', () => {
   assert.equal(r.ok, true);
   assert.equal(r.value.state, 'Bihar');
   assert.equal(r.value.district, 'Madhubani');
+});
+
+test('PEHCHAN IDs are normalized and validated without accepting arbitrary text', () => {
+  assert.equal(normalizePehchanId(' pch-123/ab '), 'PCH-123/AB');
+  assert.equal(validatePehchanId('PCH-123/AB', { required: true }).ok, true);
+  assert.equal(validatePehchanId('bad id!', { required: true }).ok, false);
 });
 
 test('validateProduct accepts a valid product', () => {

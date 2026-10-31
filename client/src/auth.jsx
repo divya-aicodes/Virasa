@@ -26,9 +26,15 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (email, password) => {
-    const { user } = await api.auth.login(email, password);
-    setUser(user);
-    return user;
+    const result = await api.auth.login(email, password);
+    if (result.user) setUser(result.user);
+    return result;
+  }, []);
+
+  const completeMfa = useCallback(async (challengeToken, code) => {
+    const result = await api.auth.mfaLogin(challengeToken, code);
+    setUser(result.user);
+    return result;
   }, []);
 
   const refresh = useCallback(async () => {
@@ -47,7 +53,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, ready, login, logout, refresh }}>
+    <AuthContext.Provider value={{ user, ready, login, completeMfa, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ShieldCheck, MapPin, Download, ScanLine, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, MapPin, Download, ScanLine, ArrowLeft, FileClock, Scale } from 'lucide-react';
 import Reveal from '../components/ui/Reveal.jsx';
+import VirasaLogo from '../components/VirasaLogo.jsx';
 import { api } from '../lib/api.js';
 
 const stepNotes = [
@@ -18,10 +19,19 @@ export default function ProductPage() {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [evidence, setEvidence] = useState([]);
+  const [showDispute, setShowDispute] = useState(false);
+  const [dispute, setDispute] = useState({ reporterName: '', reporterEmail: '', reason: '' });
+  const [disputeNotice, setDisputeNotice] = useState('');
 
   useEffect(() => {
-    api.verify.check(id)
-      .then(setData)
+    Promise.all([api.verify.check(id), api.products.history(id), api.products.evidence(id)])
+      .then(([verification, revisionResult, evidenceResult]) => {
+        setData(verification);
+        setHistory(revisionResult.revisions || []);
+        setEvidence(evidenceResult.evidence || []);
+      })
       .catch((e) => setError(e.message));
   }, [id]);
 
@@ -55,6 +65,18 @@ export default function ProductPage() {
   const price = Number(p.price || 0).toLocaleString('en-IN');
   const hash = verify.hash || '';
   const prevHash = verify.prevHash || '';
+
+  async function submitDispute(event) {
+    event.preventDefault();
+    setDisputeNotice('');
+    try {
+      const result = await api.disputes.create({ productId: p.id, ...dispute });
+      setDisputeNotice(`Dispute ${result.id} was recorded. The certificate is paused during review.`);
+      setDispute({ reporterName: '', reporterEmail: '', reason: '' });
+    } catch (submitError) {
+      setDisputeNotice(submitError.message);
+    }
+  }
 
   return (
     <main className="paper-texture min-h-screen bg-[#e9e5dc] pb-24 pt-24 text-[#2b241d] md:pt-28">
@@ -103,7 +125,7 @@ export default function ProductPage() {
               <span className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.2em] text-[#2b241d]/55">Fol. {String(verify.chainIndex).padStart(3, '0')}</span>
 
               <header className="text-center">
-                <p className="font-serif text-4xl leading-none tracking-[-0.045em] sm:text-5xl">Virasā</p>
+                <VirasaLogo size="small" className="justify-center" />
                 <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.36em] text-[#71675c]">Certificate of provenance · प्रमाण पत्र</p>
               </header>
 
@@ -184,6 +206,59 @@ export default function ProductPage() {
             </article>
           </Reveal>
         </section>
+
+        <section className="mt-14 grid gap-7 lg:grid-cols-2">
+          <Reveal>
+            <article className="paper-sheet border border-[#2b241d]/20 bg-[#fbf7ee] p-6 shadow-[0_18px_45px_rgba(48,39,30,0.1)] sm:p-8">
+              <div className="flex items-center gap-3 border-b border-[#2b241d]/20 pb-4">
+                <FileClock className="h-5 w-5 text-[#8b6921]" />
+                <div><p className="section-eyebrow">Append-only history</p><h2 className="mt-1 font-serif text-2xl">Every revision remains visible.</h2></div>
+              </div>
+              <ol className="mt-5 divide-y divide-[#2b241d]/10">
+                {history.map((revision) => (
+                  <li key={revision.id} className="grid grid-cols-[3rem_1fr_auto] gap-3 py-3 text-sm">
+                    <span className="font-serif text-lg text-[#8b6921]">r{revision.revision_no}</span>
+                    <span><span className="block font-medium capitalize">{revision.action.replaceAll('_', ' ')}</span><span className="mt-1 block text-xs text-[#635a50]">{revision.reason || 'Registry update'}</span></span>
+                    <time className="text-right text-[10px] text-[#756a5e]">{new Date(revision.created_at).toLocaleDateString()}</time>
+                  </li>
+                ))}
+              </ol>
+            </article>
+          </Reveal>
+
+          <Reveal delay={0.08}>
+            <article className="paper-sheet border border-[#2b241d]/20 bg-[#fbf7ee] p-6 shadow-[0_18px_45px_rgba(48,39,30,0.1)] sm:p-8">
+              <div className="flex items-center justify-between gap-4 border-b border-[#2b241d]/20 pb-4">
+                <div><p className="section-eyebrow">Evidence register</p><h2 className="mt-1 font-serif text-2xl">{evidence.length} documented items</h2></div>
+                <ShieldCheck className="h-6 w-6 text-[#3f6a4b]" />
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {evidence.map((item) => (
+                  <figure key={item.id} className="border border-[#2b241d]/15 bg-[#eee7d8] p-2">
+                    {item.mime_type?.startsWith('video/') ? <video src={item.url} className="aspect-[4/3] w-full object-cover" controls preload="metadata" /> : <img src={item.url} alt={item.caption || 'Provenance evidence'} className="aspect-[4/3] w-full object-cover" loading="lazy" />}
+                    <figcaption className="mt-2 text-[10px] leading-4 text-[#635a50]">{item.caption || item.evidence_type}<span className="mt-1 block font-semibold uppercase tracking-[0.1em] text-[#3f6a4b]">{item.verification_status}</span></figcaption>
+                  </figure>
+                ))}
+              </div>
+            </article>
+          </Reveal>
+        </section>
+
+        <Reveal className="mt-10">
+          <section className="border-y border-[#2b241d]/25 py-7">
+            <button type="button" onClick={() => setShowDispute((visible) => !visible)} className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7d5d10]">
+              <Scale className="h-4 w-4" /> Report incorrect provenance or ownership
+            </button>
+            {showDispute && (
+              <form onSubmit={submitDispute} className="mt-6 grid max-w-3xl gap-4 border border-[#2b241d]/15 bg-[#fbf7ee] p-5 sm:grid-cols-2">
+                <label className="text-xs">Your name<input required minLength={2} maxLength={100} value={dispute.reporterName} onChange={(event) => setDispute({ ...dispute, reporterName: event.target.value })} className="field-line mt-1 w-full" /></label>
+                <label className="text-xs">Contact email<input required type="email" value={dispute.reporterEmail} onChange={(event) => setDispute({ ...dispute, reporterEmail: event.target.value })} className="field-line mt-1 w-full" /></label>
+                <label className="text-xs sm:col-span-2">What is incorrect?<textarea required minLength={20} maxLength={2000} value={dispute.reason} onChange={(event) => setDispute({ ...dispute, reason: event.target.value })} className="field-line mt-1 min-h-28 w-full resize-y" /></label>
+                <div className="flex items-center gap-4 sm:col-span-2"><button type="submit" className="editorial-button px-5 py-3 text-xs">Submit dispute</button>{disputeNotice && <p className="text-xs text-[#635a50]" role="status">{disputeNotice}</p>}</div>
+              </form>
+            )}
+          </section>
+        </Reveal>
 
         <section className="pb-6 pt-24 sm:pt-32">
           <Reveal>

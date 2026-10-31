@@ -27,6 +27,28 @@ export function assertProductionSecurity() {
   if (!baseUrl.startsWith('https://')) {
     throw new Error('Production BASE_URL must use HTTPS');
   }
+
+  if (String(process.env.MFA_ENCRYPTION_KEY || '').length < 32) {
+    throw new Error('Production MFA_ENCRYPTION_KEY must contain at least 32 characters');
+  }
+  if (process.env.REQUIRE_ADMIN_MFA !== 'true') {
+    throw new Error('Production requires REQUIRE_ADMIN_MFA=true');
+  }
+  if (String(process.env.METRICS_TOKEN || '').length < 32) {
+    throw new Error('Production METRICS_TOKEN must contain at least 32 characters');
+  }
+  if (process.env.REQUIRE_EMAIL_VERIFICATION !== 'false' && (!process.env.SMTP_URL || !process.env.EMAIL_FROM)) {
+    throw new Error('Production email verification requires SMTP_URL and EMAIL_FROM');
+  }
+
+  const driver = (process.env.STORAGE_DRIVER || 'local').toLowerCase();
+  if (!['local', 's3'].includes(driver)) throw new Error('STORAGE_DRIVER must be local or s3');
+  if (driver === 's3') {
+    for (const name of ['S3_BUCKET', 'S3_REGION', 'CDN_BASE_URL']) {
+      if (!process.env[name]) throw new Error(`${name} is required for S3 storage`);
+    }
+    if (!String(process.env.CDN_BASE_URL).startsWith('https://')) throw new Error('CDN_BASE_URL must use HTTPS');
+  }
 }
 
 export function assertSafeProductionSeed() {

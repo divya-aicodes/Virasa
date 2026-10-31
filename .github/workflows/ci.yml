@@ -31,3 +31,44 @@ jobs:
 
       - name: Build client
         run: npm run build --prefix client
+
+      - name: Run frontend tests
+        run: npm test --prefix client -- --run
+
+      - name: Create and verify backup
+        shell: bash
+        run: |
+          npm run seed --prefix server
+          npm run backup --prefix server
+          latest="$(ls -t server/backups/*.db.gz | head -1)"
+          npm run backup:test --prefix server -- "$latest"
+
+  browser-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix server
+          npm ci --prefix client
+          npx playwright install --with-deps chromium
+
+      - name: Run end-to-end and accessibility tests
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14

@@ -13,25 +13,9 @@ import {
   User,
 } from 'lucide-react';
 import Reveal from '../components/ui/Reveal.jsx';
+import HeritageCarousel from '../components/HeritageCarousel.jsx';
+import VirasaLogo from '../components/VirasaLogo.jsx';
 import { api } from '../lib/api.js';
-
-const fallbackProduct = {
-  id: 'KC-A1B2C3',
-  title: 'Krishna Leela — Peacock Dance',
-  description: 'A hand-painted Madhubani artwork made with natural dyes on handmade paper, documented from its first bamboo-nib outline to the final stroke.',
-  image: '/uploads/product-KC-A1B2C3-final.svg',
-  artisan_name: 'Sunita Devi',
-  artisan_village: 'Ranti, Madhubani',
-  artisan_craft: 'Madhubani Painting',
-  chain_index: 1,
-  price: 4500,
-  materials: ['Handmade paper', 'Vegetable dyes', 'Bamboo nib'],
-  steps: [
-    { image: '/uploads/product-KC-A1B2C3-step1.svg', caption: 'Seeking form' },
-    { image: '/uploads/product-KC-A1B2C3-step2.svg', caption: 'Infusing colour' },
-    { image: '/uploads/product-KC-A1B2C3-step4.svg', caption: 'Carrying heritage' },
-  ],
-};
 
 const stats = [
   { value: '3,00,000+', label: 'artisan livelihoods tied to endangered craft traditions' },
@@ -84,8 +68,6 @@ export default function Landing() {
     api.products.list().then(setProducts).catch(() => setProducts([]));
   }, []);
 
-  const hero = products[0] || fallbackProduct;
-
   return (
     <div>
       <section className="pt-20">
@@ -103,11 +85,7 @@ export default function Landing() {
             <div className="absolute -left-20 bottom-8 h-32 w-72 rotate-6 border-y border-[#b08a55]/15 bg-[#725233]/10" />
             <div className="relative mx-auto w-full max-w-[39rem]">
               <div className="artwork-mount relative -rotate-[3deg]">
-                <img
-                  src={hero.image}
-                  alt="Handmade artwork from the Virasā living archive"
-                  className="aspect-[4/3] w-full object-cover saturate-[.9]"
-                />
+                <HeritageCarousel className="aspect-[4/3] w-full" imageClassName="saturate-[.92]" />
                 <svg
                   viewBox="0 0 120 120"
                   className="absolute left-0 top-0 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rotate-[3deg] animate-[spin_24s_linear_infinite] drop-shadow-[0_2px_3px_rgba(20,14,8,0.35)] sm:h-28 sm:w-28"
@@ -387,7 +365,7 @@ export default function Landing() {
 
       <footer className="border-t border-ink-900/15 px-6 py-10">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-center sm:flex-row sm:text-left">
-          <p className="font-serif text-2xl font-medium">Virasā</p>
+          <VirasaLogo size="small" />
           <p className="text-[11px] uppercase tracking-[.17em] text-ink-900/60">Smart India Hackathon 2026 · Heritage carried forward</p>
         </div>
       </footer>

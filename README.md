@@ -1,349 +1,138 @@
 # Virasā — Heritage, Verified
 
-**Virasā** (विरसा — "legacy / heritage") is a provenance platform that preserves India's handmade
-craft traditions by binding each artwork to a tamper-evident chain of provenance records.
+Virasā is a provenance platform for India’s handmade heritage. Artisans document a work, approve ownership and publication, and submit evidence; archive administrators review it before a public certificate is issued. Every change appends a SHA-256-linked revision instead of rewriting history.
 
-A Madhubani painting, a Warli mural, a Pattachitra panel — every piece is documented by the
-artisan with its maker, village, materials, and the individual steps of its creation. Those
-records are linked together with SHA-256 hashes into a lightweight chained ledger. Anyone with a
-QR scan or an accession ID can recompute the fingerprints, confirm the chain is unbroken, and
-download a certificate of authenticity.
+## Development phases
 
-> Proof should feel as human as the hands it protects.
+### Phase 1 — Working product foundation
 
----
+- React 18 and Vite client with public collection, product, verification, artisan studio, and administration routes.
+- Artisan and product registries with a guided multi-step product creation workflow.
+- Canonical JSON records fingerprinted with SHA-256 and linked through `prev_hash` values.
+- Unique accession IDs, public integrity verification, QR codes, and downloadable PDF certificates.
+- Role-based authentication using scrypt password hashes, HttpOnly SameSite cookies, Bearer tokens, and service API keys.
+- Admin-only **Maintain** navigation and protected administration endpoints.
+- CORS allow-listing, rate limiting, secure HTTP headers, server-side validation, and hardened file uploads.
+- Upload checks for extension, MIME type, magic bytes, file size, and controlled storage paths.
 
-## Why this exists
+### Phase 2 — Credible heritage records
 
-- **3,00,000+** artisan livelihoods depend on endangered craft traditions.
-- **₹1,200 Cr** is lost each year to counterfeit handicrafts.
-- A single **QR scan** lets a buyer meet the maker and verify every documented step.
+- Append-only `product_revisions` ledger with immutable snapshots, revision hashes, and previous-revision links.
+- Required correction reasons for verified records and archival instead of destructive deletion.
+- Artisan consent controls for public profiles, location data, media use, and certificate publication.
+- `audit_log` records for protected actions, actors, timestamps, and workflow transitions.
+- Evidence records with verification status, reviewer information, timestamps, MIME type, and SHA-256 media hashes.
+- Dispute workflow covering `open`, `under_review`, `resolved`, and `rejected` states.
+- Explicit artisan ownership approval through the `owner_approved` gate before administrator verification.
+- PEHCHAN identity review for artisan onboarding, with `pending`, `verified`, `rejected`, and `reverification_required` states that gate public publication and certificates.
+- Media asset management with ownership, canonical URL, original filename, MIME type, byte size, content hash, consent, replacement, and revocation data.
+- Unicode PDF certificates using embedded fonts, `fontkit`, Devanagari support, and QR verification links.
 
-Unlike heavyweight blockchain stacks, Virasā needs **no wallets, no gas fees, and no crypto
-expertise** — only a chained ledger any browser can verify.
+### Phase 3 — Product maturity
 
----
+- SQLite FTS5 indexes, synchronization triggers, BM25 relevance ranking, and server-side pagination.
+- Protected administrator product editing that validates changes and appends a new immutable revision.
+- Email verification and password reset through expiring, hashed, single-use tokens with SMTP or development-outbox delivery.
+- Administrator TOTP MFA using QR enrollment, `otplib`, AES-GCM encrypted secrets, and MFA-aware route authorization.
+- Playwright product-flow tests and automated accessibility checks using axe-core.
+- Structured JSON request logs, request IDs, counters, Prometheus-format metrics, database and ledger health checks, and throttled webhook alerts.
+- Consistent SQLite backups using `VACUUM INTO`, gzip compression, integrity checks, and automated restore tests.
+- Local media storage for development or S3-compatible object storage with optional CDN delivery.
+- Docker configuration, GitHub Actions CI, production deployment guidance, and an operations runbook.
 
-## Features
+## Stack
 
-- **Chained provenance ledger** — each product hashes the canonical record plus the previous
-  block's hash (`prev_hash`). Alter one field and every downstream check fails.
-- **Artisan registry** — record name, village, district, state, craft, bio, and photo.
-- **Multi-step making process** — upload a main artwork photo plus up to 4 creation-step photos
-  with captions.
-- **Instant verification** — enter an accession ID (`KC-…`) and the server recomputes the
-  fingerprint and checks every link in the chain.
-- **Search & pagination** on the API for both products and artisans (server-side).
-- **Registry management (Admin)** — a `/admin` dashboard to search, create, edit, and delete
-  artisans, inspect products, and remove invalid product records.
-- **PDF certificates** — a branded, QR-coded certificate of authenticity per product.
-- **Secure uploads** — MIME/extension allow-list, magic-byte sniffing, file-size limits.
-- **API-key auth** for all write endpoints, plus per-route rate limiting.
-- **Accounts & sessions** — sign-up and sign-in with scrypt-hashed passwords and HttpOnly session
-  cookies; artisans manage only their linked profiles and products, while admins manage the registry.
-- **Bilingual artisan flow** — English / हिन्दी.
-- **Production-ready serving** — the Express server also serves the built React client with SPA
-  fallback, so a single server is all you need to deploy.
+| Layer | Technology |
+|---|---|
+| Client | React, Vite, Tailwind CSS, Framer Motion |
+| API | Node.js 22+, Express |
+| Data | SQLite WAL, FTS5, SHA-256 revision ledger |
+| Security | scrypt, HttpOnly cookies, TOTP MFA, AES-GCM secret encryption, rate limits |
+| Media | Multer, local storage or S3-compatible storage/CDN |
+| QA | Node test runner, Vitest, Playwright, axe-core |
 
----
+## Validation status
 
-## Tech stack
+The following checks passed in the local development environment:
 
-| Layer | Tools |
-|-------|-------|
-| Frontend | React 18, Vite 5, Tailwind CSS v4, Framer Motion, lucide-react |
-| Backend | Node.js 22+ (`node:sqlite`), Express 4 |
-| Data | SQLite (WAL mode), chained SHA-256 hashes via `node:crypto` |
-| Extras | pdf-lib (certificates), qrcode (QR codes), multer (uploads), express-rate-limit |
-| Tests | Node's built-in test runner (`node --test`) |
+| Check | Result |
+|---|---|
+| Backend automated tests | 68 / 68 passed |
+| Frontend automated tests | 23 / 23 passed |
+| Playwright browser checks | 7 / 7 passed: 3 product-flow scenarios and 4 axe accessibility scans |
+| Production frontend build | Passed with 1,963 modules transformed |
+| Backup restore validation | Passed with database integrity confirmed and 9 revisions verified |
+| Dependency audit | 0 known npm vulnerabilities in the root, client, and server dependency trees |
 
-Requires **Node.js ≥ 22.5** for the stable built-in SQLite module.
+The dependency audit covers vulnerabilities known to npm at the time of the scan. It does not prove that the application has no security defects. Automated accessibility scans also require manual keyboard, screen-reader, zoom, and usability testing before production acceptance.
 
----
+## PEHCHAN artisan verification
 
-## Getting started
+New artisan registration requires the PEHCHAN ID printed on the artisan card together with the matching name, craft, village/town, district, and state. Virasā immediately creates a linked artisan profile in `pending` state. An archive administrator then compares those details with the Government of India [Artisan Database](https://indian.handicrafts.gov.in/en/search) before recording approval or a reason for rejection.
+
+- Virasā does **not** request or store an Aadhaar number.
+- This prototype uses a recorded manual review because no supported public government verification API is assumed or claimed.
+- A PEHCHAN ID is unique in the Virasā registry and is never exposed through the public artisan API.
+- Changing a PEHCHAN ID clears the previous approval and requires a new review.
+- Unverified artisans may maintain their private profile, but their products cannot be submitted, publicly listed, verified, or issued a certificate.
+- Seeded legacy demonstration artisans remain marked verified so the existing sample collection continues to work; this is migration compatibility, not evidence of a live government check.
+
+The official government portal also supports PEHCHAN-ID/OTP artisan login. A production integration should use a formally supported government API or authorization flow if one becomes available; it should not scrape the public portal.
+
+## Local setup
 
 ```bash
-# 1. Install everything and seed the database
 npm run setup
-
-# 2. Configure environment (optional)
-cp server/.env.example server/.env
-
-# 3. Run in development (server on :3001, client on :5173)
 npm run dev
 ```
 
-Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/uploads` to the API.
+Open `http://localhost:5173`. The API runs at `http://localhost:3001`. Development seed accounts use values from `server/.env`; the bundled defaults are demonstration credentials and production startup rejects them.
 
----
+Use Node.js 22 for local Playwright runs, matching the browser-test CI job. The API and build are also tested on Node.js 24, but Playwright worker shutdown is unreliable on the current Windows Node.js 24 runtime.
 
-## Scripts
+## Commands
 
-Run from the repo root:
+| Command | Purpose |
+|---|---|
+| `npm run setup` | Install client/server dependencies and seed local demo data |
+| `npm run dev` | Start API and Vite client |
+| `npm run build` | Build the production frontend |
+| `npm test` | Run backend tests |
+| `npm test --prefix client -- --run` | Run frontend unit/integration tests |
+| `npm run test:e2e` | Run Playwright product flows |
+| `npm run test:a11y` | Run automated WCAG A/AA checks |
+| `npm run test:all` | Run backend, frontend, build, E2E, and accessibility suites |
+| `npm run backup --prefix server` | Create a compressed consistent database backup |
+| `npm run backup:test --prefix server -- <file>` | Restore and validate a backup |
 
-| Command | Description |
-|---------|-------------|
-| `npm run setup` | Install server + client deps and seed the database |
-| `npm run dev` | Start API (`:3001`) and Vite client (`:5173`) together |
-| `npm run seed` | Seed / re-seed the database (idempotent) |
-| `npm run build` | Build the React client into `client/dist` |
-| `npm test` | Run server tests |
-| `npm run test --prefix client` | Run frontend (Vitest) tests |
-| `npm start` | Production: serve the built client + API on `:3001` |
+## Core API
 
-### Docker
+- `GET /api/products?q=&page=&limit=` and `GET /api/artisans?q=&page=&limit=` — FTS search and pagination.
+- `GET /api/products/:id/history` — append-only revision history.
+- `GET /api/verify/:id` and `/api/verify/:id/certificate` — public verification and certificate.
+- `/api/auth/register`, `/login`, `/verify-email`, `/forgot-password`, `/reset-password` — account lifecycle.
+- `POST /api/artisans/:id/pehchan/verify` and `/pehchan/reject` — administrator PEHCHAN review decisions.
+- `/api/auth/mfa/setup`, `/mfa/confirm`, `/mfa/login` — administrator MFA.
+- `GET /api/health` — database and ledger readiness.
+- `GET /api/metrics` — authenticated Prometheus-format telemetry.
+
+Write operations require an authorized browser session or a configured service API key. Admin-only endpoints enforce the administrator role server-side.
+
+## Production
+
+Copy [`server/.env.example`](server/.env.example), provide every required production secret/service, and follow [`docs/production-deployment.md`](docs/production-deployment.md). Operational monitoring, object-storage, backup, and recovery procedures are in [`docs/operations.md`](docs/operations.md).
+
+Important limits:
+
+- SQLite supports one application writer well; migrate to PostgreSQL before horizontal multi-writer scaling.
+- Email delivery, S3/CDN, monitoring, and alerts require external services configured by the deployer.
+- Automated axe checks catch common WCAG failures but do not replace keyboard, screen-reader, zoom, and human usability testing.
+
+## Docker
 
 ```bash
 docker build -t virasa .
-docker run -p 3001:3001 -v virasa-data:/data \
-  -e SEED_DEMO_DATA=true \
-  -e ADMIN_PASSWORD=<strong-password> \
-  -e ARTISAN_PASSWORD=<strong-password> \
-  -e ALLOWED_ORIGINS=https://virasa.example.com \
-  -e BASE_URL=https://virasa.example.com \
-  -e API_KEYS=<service-key> virasa
+docker run --env-file server/.env -p 3001:3001 -v virasa-data:/data virasa
 ```
 
-The named volume preserves the SQLite database and uploaded media across container replacement.
-Production demo seeding is opt-in and refuses the bundled development passwords.
-
----
-
-## Environment variables
-
-Copy `server/.env.example` to `server/.env`. Key values:
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `PORT` | `3001` | API/production port |
-| `NODE_ENV` | `development` | `production` enables client serving |
-| `ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:3001` | CORS allow-list |
-| `BASE_URL` | `http://localhost:3001` | Base used in certificate QR links |
-| `API_KEYS` | *(empty)* | Optional service keys for trusted non-browser writes |
-| `RATE_WINDOW_MS` / `RATE_MAX` | `900000` / `200` | Global rate limit |
-| `WRITE_MAX` / `UPLOAD_MAX` | `20` / `30` | Per-window write/upload limits |
-| `DB_PATH` | `kalachain.db` | SQLite file location |
-| `UPLOAD_DIR` | `uploads` | Uploaded media directory |
-| `SEED_DEMO_DATA` | `false` | Explicit production gate for bundled demo data |
-
-> Write endpoints always require a signed-in authorized account or service key. Service clients
-> must send API keys only through the `x-api-key` header; query-string keys are rejected.
-
-Generate a key:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
----
-
-## API reference
-
-Base URL: `/api` (proxied in dev, served directly in production).
-
-### Health & discovery
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | Liveness + counts |
-| GET | `/api` | Endpoint index |
-
-### Authentication
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/auth/register` | Create an account (`name`, `email`, `password`; optional `artisanId`) |
-| POST | `/api/auth/login` | Sign in, returns `{ token, user }` (Bearer token, 7-day session) |
-| POST | `/api/auth/logout` | Invalidate the session (auth) |
-| GET | `/api/auth/me` | Current user (auth) |
-
-Send the token as `Authorization: Bearer <token>`. Registering a role of `admin` requires the
-`ADMIN_SIGNUP_KEY` set on the server. Passwords are hashed with Node's `scrypt` (salted,
-constant-time comparison) and stored in the `users` table; session tokens live in the
-`sessions` table and expire after 7 days.
-
-**Role separation.** Browser authentication uses an HttpOnly, `SameSite=Lax` session cookie.
-Bearer sessions remain available for non-browser API clients. Admin sessions and valid service
-API keys can manage the full registry. Artisan accounts may create one linked artisan profile and
-may create, update, or delete only products belonging to that profile. Configure development demo
-account passwords in `server/.env`; production refuses known bundled passwords.
-
-The client guards `/admin` behind a valid admin session and redirects anonymous visitors to
-`/login`.
-
-### Artisans
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/artisans` | List (supports `q`, `craft`, `state`, `page`, `limit`) |
-| GET | `/api/artisans/:id` | Single artisan |
-| POST | `/api/artisans` | Create artisan (auth) |
-| PATCH | `/api/artisans/:id` | Update artisan (auth) |
-| DELETE | `/api/artisans/:id` | Delete artisan if no products linked (auth) |
-
-```json
-{
-  "name": "Sunita Devi",
-  "village": "Ranti, Madhubani",
-  "craft": "Madhubani Painting",
-  "state": "Bihar",
-  "district": "Madhubani",
-  "bio": "Third-generation Mithila artist.",
-  "photo": "/uploads/avatar-ART-MITHILA1.svg"
-}
-```
-
-**Pagination.** Add `page` and `limit` to receive a paginated response:
-
-```json
-{ "data": [ … ], "total": 9, "page": 1, "limit": 20, "totalPages": 1 }
-```
-
-Without `page`/`limit` the route returns a plain array (backward compatible).
-
-### Products
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/products` | List (supports `q`, `category`, `craft`, `page`, `limit`) |
-| GET | `/api/products/:id` | Single product |
-| POST | `/api/products` | Create product + append to chain (auth) |
-| PATCH | `/api/products/:id` | Update product + re-link chain (auth) |
-| DELETE | `/api/products/:id` | Delete product + re-link chain (auth) |
-
-```json
-{
-  "artisan_id": "ART-MITHILA1",
-  "title": "Krishna Leela — Peacock Dance",
-  "description": "Hand-painted with natural dyes.",
-  "image": "/uploads/product-KC-A1B2C3-final.svg",
-  "steps": [
-    { "image": "/uploads/...-step1.svg", "caption": "Outline drawn by hand" }
-  ],
-  "materials": ["Handmade paper", "Vegetable dyes"],
-  "price": 4500,
-  "category": "Madhubani"
-}
-```
-
-### Verification & certificates
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/verify/:id` | Recompute fingerprint + chain check |
-| GET | `/api/verify` | Full chain (ordered blocks) |
-| GET | `/api/verify/:id/certificate` | Download PDF certificate |
-
-`GET /api/verify/:id` response:
-
-```json
-{
-  "valid": true,
-  "verify": {
-    "valid": true,
-    "hash": "d66b9484…",
-    "prevHash": "GENESIS",
-    "chainIndex": 1,
-    "chainLength": 9,
-    "recomputed": "d66b9484…",
-    "chainLink": true
-  },
-  "product": { "id": "KC-A1B2C3", "title": "…", "artisan_name": "…", "…": "…" }
-}
-```
-
-### Uploads
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/upload` | `multipart/form-data` `files` (max 10, 5 MB each, JPG/PNG/WebP) (auth) |
-| GET | `/uploads/*` | Static uploaded assets |
-
----
-
-## How the chain works
-
-1. A product is created with its canonical fields: `id, artisan_id, title, description, image,
-   steps, materials, price, category, created_at`.
-2. The server reads the **last** block in the ledger.
-3. `hash = sha256(canonical JSON + "|" + prev_hash)` — the previous block's hash is the
-   `GENESIS` marker for the first block.
-4. On verification the server recomputes every block from genesis through the selected record,
-   checks contiguous indexes, and confirms every previous-hash link. Any direct database tampering
-   produces a mismatch and the record is reported invalid.
-
-**Important trust boundary:** this is a mutable, tamper-evident operational registry—not an
-externally anchored immutable blockchain. Authorized edits or deletions deliberately re-link the
-chain in one SQLite transaction. Direct, unauthorized database changes are detectable; authorized
-history preservation and append-only revisions are planned separately.
-
-See `server/lib/hashchain.js` and `server/lib/canonical.js`.
-
----
-
-## Running tests
-
-```bash
-npm test                # server suite (validation, chain integrity, HTTP API)
-npm run test --prefix client   # frontend (Vitest + Testing Library)
-```
-
-The server suite covers validation, chain integrity (including tamper detection), search &
-pagination, and the full HTTP API — including update/delete with chain re-linking — against an
-isolated throwaway SQLite database, so it never touches real data.
-
----
-
-## Continuous integration
-
-A GitHub Actions workflow (`.github/workflows/ci.yml`) runs the server tests and builds the
-client on Node 22 and 24 for every push and pull request.
-
----
-
-## Project structure
-
-```
-Virasā/
-├── client/                 # React + Vite + Tailwind frontend
-│   ├── src/
-│   │   ├── pages/          # Landing, Gallery, ProductPage, VerifyPage, ArtisanPanel, Admin
-│   │   ├── components/     # Navbar and shared UI helpers
-│   │   ├── lib/api.js      # fetch wrapper
-│   │   ├── test/           # Vitest tests
-│   │   └── main.jsx / App.jsx
-│   └── vite.config.js      # dev proxy for /api and /uploads; vitest config
-├── server/                 # Express + SQLite backend
-│   ├── index.js            # entry point (starts server)
-│   ├── app.js              # the Express app (importable, testable)
-│   ├── db.js               # schema + connection
-│   ├── seed.js             # curated dataset + chain bootstrap
-│   ├── routes/             # artisans, products, verify
-│   ├── lib/                # hashchain, canonical, validate, certificate
-│   └── test/               # node --test suites
-├── .github/workflows/ci.yml # CI pipeline
-├── Dockerfile / .dockerignore / .nvmrc
-├── .gitignore
-└── package.json
-```
-
----
-
-## Deployment
-
-1. Build the client: `npm run build`.
-2. Copy `server/.env.example` → `server/.env`; set strong account passwords, an HTTPS
-   `BASE_URL`, explicit `ALLOWED_ORIGINS`, and any service `API_KEYS`.
-3. Run `npm start` (or `NODE_ENV=production node server/index.js`). The API and the built
-   client are served together on `PORT` (default `3001`).
-
-The app is a single Node process with an embedded SQLite database. Production deployments must
-mount durable storage for both `DB_PATH` and `UPLOAD_DIR` and must back up that volume. Horizontal
-multi-instance deployment requires moving the database and media to shared services first.
-
----
-
-## License
-
-For academic / hackathon demonstration use (Smart India Hackathon 2026).
+The image runs migrations and serves the built client but intentionally does not seed demonstration data.
