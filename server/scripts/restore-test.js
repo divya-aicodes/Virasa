@@ -3,13 +3,24 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 
 const backup = process.argv[2];
 if (!backup) throw new Error('Usage: npm run backup:test -- <path-to-backup.db.gz>');
-const source = path.resolve(backup);
+
+function resolveBackupPath(value) {
+  const fromCurrentDirectory = path.resolve(value);
+  if (existsSync(fromCurrentDirectory)) return fromCurrentDirectory;
+
+  const fromRepositoryRoot = path.resolve(process.cwd(), '..', value);
+  if (existsSync(fromRepositoryRoot)) return fromRepositoryRoot;
+
+  throw new Error(`Backup file not found: ${value}`);
+}
+
+const source = resolveBackupPath(backup);
 const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'virasa-restore-'));
 const restored = path.join(tempDir, 'restored.db');
 
