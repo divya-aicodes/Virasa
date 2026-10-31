@@ -122,6 +122,12 @@ Write operations require an authorized browser session or a configured service A
 
 Copy [`server/.env.example`](server/.env.example), provide every required production secret/service, and follow [`docs/production-deployment.md`](docs/production-deployment.md). Operational monitoring, object-storage, backup, and recovery procedures are in [`docs/operations.md`](docs/operations.md).
 
+### Vercel hosted prototype
+
+The repository includes [`vercel.json`](vercel.json) and a Vercel Function adapter so the GitHub repository can be imported directly into Vercel for demonstrations. Vercel does not provide persistent local filesystem storage for SQLite, so each warm function instance uses an isolated database and upload directory under `/tmp`, seeded from the bundled demonstration records. Changes, registrations, sessions, and uploaded media can reset at any time and may not be shared across function instances.
+
+This mode is intentionally a prototype, not the production architecture. Do not enter real personal data or use it as the authoritative archive. A durable public release must use persistent database and object-storage services and the deployment model in [`docs/production-deployment.md`](docs/production-deployment.md).
+
 Important limits:
 
 - SQLite supports one application writer well; migrate to PostgreSQL before horizontal multi-writer scaling.
