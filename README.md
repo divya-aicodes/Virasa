@@ -128,7 +128,7 @@ The repository includes [`vercel.json`](vercel.json) and a Vercel Function adapt
 
 This mode is intentionally a prototype, not the production architecture. Do not enter real personal data or use it as the authoritative archive. A durable public release must use persistent database and object-storage services and the deployment model in [`docs/production-deployment.md`](docs/production-deployment.md).
 
-Important limits:
+Important limits:-
 
 - SQLite supports one application writer well; migrate to PostgreSQL before horizontal multi-writer scaling.
 - Email delivery, S3/CDN, monitoring, and alerts require external services configured by the deployer.
