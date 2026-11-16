@@ -142,3 +142,6 @@ docker run --env-file server/.env -p 3001:3001 -v virasa-data:/data virasa
 ```
 
 The image runs migrations and serves the built client but intentionally does not seed demonstration data.
+
+QR code Scan and Verify the Handicraft 
+<img width="1400" height="1700" alt="virasa_designer_qr" src="https://github.com/user-attachments/assets/e5ccc0e5-147b-47f5-a0cf-d9ebaf2e28ea" />
