@@ -72,23 +72,51 @@ export default function ArtisanPanel() {
   const [linkedArtisanId, setLinkedArtisanId] = useState(user?.artisanId || null);
   const [artisanRecord, setArtisanRecord] = useState(null);
   const [consents, setConsents] = useState(defaultConsents);
+  const [artisanLoadState, setArtisanLoadState] = useState(user?.artisanId ? 'loading' : 'idle');
 
   useEffect(() => {
-    if (!user?.artisanId) return;
+    let active = true;
+    if (!user?.artisanId) {
+      setLinkedArtisanId(null);
+      setArtisanRecord(null);
+      setArtisanLoadState('idle');
+      return () => { active = false; };
+    }
+
     setLinkedArtisanId(user.artisanId);
-    Promise.all([api.artisans.get(user.artisanId), api.artisans.consents(user.artisanId)])
-      .then(([artisan, consentResult]) => {
+    setArtisanLoadState('loading');
+    Promise.allSettled([api.artisans.get(user.artisanId), api.artisans.consents(user.artisanId)])
+      .then(([artisanResult, consentResult]) => {
+        if (!active) return;
+        if (artisanResult.status !== 'fulfilled') throw artisanResult.reason;
+
+        const artisan = artisanResult.value;
+        // The deployed API embeds consent on the artisan response. Newer API
+        // versions may instead provide it from the dedicated endpoint.
+        const returnedConsents = consentResult.status === 'fulfilled'
+          ? consentResult.value.consents
+          : artisan.consent || artisan.consents;
         setArtisanRecord(artisan);
         setProfile({ name: artisan.name, village: artisan.village, craft: artisan.craft });
-        setConsents({ ...defaultConsents, ...(consentResult.consents || {}) });
+        setConsents({ ...defaultConsents, ...(returnedConsents || {}) });
+        setArtisanLoadState('ready');
       })
-      .catch(() => {});
+      .catch(() => {
+        if (active) setArtisanLoadState('error');
+      });
+
+    return () => { active = false; };
   }, [user?.artisanId]);
 
   const t = T[lang];
   const alt = T[lang === 'en' ? 'hi' : 'en'];
-  const pehchanVerified = artisanRecord?.pehchan_verification_status === 'verified';
-  const canContinue1 = pehchanVerified && profile.name && profile.village && profile.craft && consents.public_profile && consents.media && consents.certificate;
+  const pehchanStatus = artisanRecord?.pehchan_verification_status
+    || (artisanRecord?.pehchan_verified === true ? 'verified' : null);
+  const pehchanVerified = pehchanStatus === 'verified';
+  const displayedPehchanStatus = artisanLoadState === 'error'
+    ? 'unavailable'
+    : pehchanStatus || 'loading';
+  const canContinue1 = artisanLoadState === 'ready' && pehchanVerified && profile.name && profile.village && profile.craft && consents.public_profile && consents.media && consents.certificate;
   const canContinue2 = product.title && mainImage;
 
   function setMaterial(e) {
@@ -238,18 +266,20 @@ export default function ArtisanPanel() {
                 </header>
 
                 {linkedArtisanId && (
-                  <div className={`mt-8 border-l-2 px-4 py-4 ${pehchanVerified ? 'border-green-800 bg-green-900/[0.04]' : artisanRecord?.pehchan_verification_status === 'rejected' ? 'border-red-800 bg-red-900/[0.04]' : 'border-amber-700 bg-amber-700/[0.05]'}`}>
+                  <div className={`mt-8 border-l-2 px-4 py-4 ${pehchanVerified ? 'border-green-800 bg-green-900/[0.04]' : pehchanStatus === 'rejected' ? 'border-red-800 bg-red-900/[0.04]' : 'border-amber-700 bg-amber-700/[0.05]'}`}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-900/75">
-                          <ShieldCheck className="h-4 w-4" /> PEHCHAN identity · {String(artisanRecord?.pehchan_verification_status || 'loading').replaceAll('_', ' ')}
+                          <ShieldCheck className="h-4 w-4" /> PEHCHAN identity · {String(displayedPehchanStatus).replaceAll('_', ' ')}
                         </p>
                         <p className="mt-2 text-xs leading-5 text-ink-900/60">
-                          {pehchanVerified
-                            ? 'Your identity has been reviewed. You may submit work for publication.'
-                            : artisanRecord?.pehchan_verification_status === 'rejected'
-                              ? `Review could not be completed: ${artisanRecord?.pehchan_rejection_reason || 'contact the archive administrator.'}`
-                              : 'An archive administrator must match your PEHCHAN ID and profile with the official artisan database before you can publish work.'}
+                          {artisanLoadState === 'error'
+                            ? 'We could not load your identity status. Refresh the page and sign in again if the problem continues.'
+                            : pehchanVerified
+                              ? 'Your identity has been reviewed. You may submit work for publication.'
+                              : pehchanStatus === 'rejected'
+                                ? `Review could not be completed: ${artisanRecord?.pehchan_rejection_reason || 'contact the archive administrator.'}`
+                                : 'An archive administrator must match your PEHCHAN ID and profile with the official artisan database before you can publish work.'}
                         </p>
                         {artisanRecord?.pehchan_id && <p className="mt-2 font-mono text-[10px] text-ink-900/50">PEHCHAN ID · {artisanRecord.pehchan_id}</p>}
                       </div>
