@@ -68,6 +68,20 @@ test('GET /api/products/:id returns a single record', async () => {
   assert.equal(rec.id, list[0].id);
 });
 
+test('GET /api/products/:id/history and /evidence are publicly accessible for verified records', async () => {
+  const historyRes = await get('/api/products/KC-A1B2C3/history');
+  assert.equal(historyRes.status, 200);
+  const historyBody = await historyRes.json();
+  assert.equal(historyBody.productId, 'KC-A1B2C3');
+  assert.ok(Array.isArray(historyBody.revisions));
+
+  const evidenceRes = await get('/api/products/KC-A1B2C3/evidence');
+  assert.equal(evidenceRes.status, 200);
+  const evidenceBody = await evidenceRes.json();
+  assert.equal(evidenceBody.productId, 'KC-A1B2C3');
+  assert.ok(Array.isArray(evidenceBody.evidence));
+});
+
 test('GET /api/verify/:id confirms a valid record', async () => {
   const { status, json } = await get('/api/verify/KC-A1B2C3');
   assert.equal(status, 200);

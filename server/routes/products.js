@@ -130,14 +130,18 @@ router.get('/', (req, res) => {
   res.json({ data: rows.map(serializeProduct), total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) });
 });
 
+function findProductWithArtisan(id) {
+  return db.prepare(`${SELECT_JOIN} WHERE p.id = ?`).get(String(id || '').toUpperCase());
+}
+
 router.get('/:id/history', (req, res) => {
-  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id.toUpperCase());
+  const product = findProductWithArtisan(req.params.id);
   if (!product || !canView(req, product)) return res.status(404).json({ error: 'Product not found' });
   res.json({ productId: product.id, revisions: revisionHistory(product.id) });
 });
 
 router.get('/:id/evidence', (req, res) => {
-  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id.toUpperCase());
+  const product = findProductWithArtisan(req.params.id);
   if (!product || !canView(req, product)) return res.status(404).json({ error: 'Product not found' });
   const rows = db.prepare(`
     SELECT id, evidence_type, url, mime_type, sha256, caption, verification_status,
@@ -148,7 +152,7 @@ router.get('/:id/evidence', (req, res) => {
 });
 
 router.get('/:id', (req, res) => {
-  const row = db.prepare(`${SELECT_JOIN} WHERE p.id = ?`).get(req.params.id.toUpperCase());
+  const row = findProductWithArtisan(req.params.id);
   if (!row || !canView(req, row)) return res.status(404).json({ error: 'Product not found' });
   res.json(serializeProduct(row));
 });
